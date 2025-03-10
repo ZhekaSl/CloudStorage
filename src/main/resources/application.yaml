@@ -1,3 +1,9 @@
 spring:
   application:
     name: CloudStorage
+
+minio:
+  endpoint: ${MINIO_URL:http://localhost:9000}
+  access-key: ${MINIO_USERNAME:admin}
+  secret-key: ${MINIO_PASSWORD:minioadmon}
+  bucket-name: user-files
