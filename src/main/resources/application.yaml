@@ -1,9 +1,14 @@
 spring:
   application:
     name: CloudStorage
+  datasource:
+    url: jdbc:postgresql://localhost:5466/cloud_storage_db
+    username: cloud-storage-user
+    password: password
+    driver-class-name: org.postgresql.Driver
 
 minio:
   endpoint: ${MINIO_URL:http://localhost:9000}
   access-key: ${MINIO_USERNAME:admin}
-  secret-key: ${MINIO_PASSWORD:minioadmon}
+  secret-key: ${MINIO_PASSWORD:minioadmin}
   bucket-name: user-files
