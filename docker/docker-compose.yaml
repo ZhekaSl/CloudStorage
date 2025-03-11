@@ -1,12 +1,30 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:16.1
+    container_name: cloud_postgres
+    ports:
+      - "5466:5432"
+    environment:
+      - POSTGRES_USER=cloud-storage-user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=cloud_storage_db
+    volumes:
+      - db_storage-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready", "-d", "cloud_storage_db" ]
+      interval: 30s
+      timeout: 60s
+      retries: 5
+      start_period: 80s
+
   minio:
     image: minio/minio
     container_name: minio
     ports:
-      - "9090:9090"
-      - "9091:9091"
+      - "9000:9000"
+      - "9001:9001"
     volumes:
       - minio-data:/data
     environment:
@@ -16,3 +34,4 @@ services:
 
 volumes:
   minio-data:
+  db_storage-data:
