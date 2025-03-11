@@ -80,6 +80,19 @@ public class MinioServiceImpl implements MinioService {
         deleteObject(sourceObjectPath);
     }
 
+    @Override
+    public boolean objectExists(String objectName) {
+        try {
+            minioClient.statObject(StatObjectArgs.builder()
+                    .bucket(minioProperties.getBucketName())
+                    .object(objectName)
+                    .build());
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     private void createBucket() throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
         String bucketName = minioProperties.getBucketName();
 
@@ -88,6 +101,4 @@ public class MinioServiceImpl implements MinioService {
             minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucketName).build());
         }
     }
-
-
 }

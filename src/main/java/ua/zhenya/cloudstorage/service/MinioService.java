@@ -24,4 +24,6 @@ public interface MinioService {
     void copyObject(String sourceObjectPath, String targetObjectPath) throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException;
 
     void moveObject(String sourceObjectPath, String targetObjectPath) throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException;
+
+    boolean objectExists(String path);
 }
