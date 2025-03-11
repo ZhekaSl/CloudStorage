@@ -6,6 +6,14 @@ spring:
     username: cloud-storage-user
     password: password
     driver-class-name: org.postgresql.Driver
+  jpa:
+    properties.hibernate:
+      batch_size: 50
+      fetch_size: 25
+      show_sql: true
+      format_sql: true
+      hbm2ddl.auto: none
+    open-in-view: false
 
 minio:
   endpoint: ${MINIO_URL:http://localhost:9000}
