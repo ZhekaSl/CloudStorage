@@ -11,6 +11,8 @@ public interface ResourceService {
 
     ResourceResponse getResourceInfo(Integer userId, String path);
 
+    void createDirectoryForUser(Integer userId);
+
     ResourceResponse createDirectory(Integer userId, String path);
 
     List<ResourceResponse> getDirectoryContent(Integer userId, String path);
