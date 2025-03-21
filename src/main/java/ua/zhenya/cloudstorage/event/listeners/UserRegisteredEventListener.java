@@ -4,19 +4,19 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionalEventListener;
 import ua.zhenya.cloudstorage.event.UserRegisteredEvent;
 import ua.zhenya.cloudstorage.model.User;
-import ua.zhenya.cloudstorage.service.MinioService;
+import ua.zhenya.cloudstorage.service.ResourceService;
 
 @Component
 @RequiredArgsConstructor
 public class UserRegisteredEventListener {
-    private final MinioService minioService;
+    private final ResourceService resourceService;
 
-    @EventListener
-    @Transactional
+    @TransactionalEventListener
     public void handleUserRegisteredEvent(UserRegisteredEvent event) {
         User user = event.getUser();
-        minioService.createUserDirectory(user.getId());
+        resourceService.createDirectoryForUser(user.getId());
     }
 }

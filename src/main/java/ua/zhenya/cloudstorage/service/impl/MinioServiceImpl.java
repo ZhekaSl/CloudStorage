@@ -103,17 +103,19 @@ public class MinioServiceImpl implements MinioService {
 
     @Override
     public boolean objectExists(String path) {
-        Iterable<Result<Item>> results = minioClient.listObjects(ListObjectsArgs.builder()
-                .bucket(minioProperties.getBucketName())
-                .prefix(path)
-                .maxKeys(1)
-                .build());
-
-        return results.iterator().hasNext();
+        try {
+            minioClient.statObject(StatObjectArgs.builder()
+                    .bucket(minioProperties.getBucketName())
+                    .object(path)
+                    .build());
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
-
-    private void createBucket() throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
+    private void createBucket() throws
+            ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
         String bucketName = minioProperties.getBucketName();
 
         boolean bucketExists = minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucketName).build());

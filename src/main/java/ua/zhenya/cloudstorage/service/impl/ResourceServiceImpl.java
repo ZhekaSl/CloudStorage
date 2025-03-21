@@ -32,8 +32,10 @@ import static ua.zhenya.cloudstorage.utils.Constants.*;
 public class ResourceServiceImpl implements ResourceService {
     private final MinioService minioService;
 
+    @Override
+    @Transactional
     public void createDirectoryForUser(Integer id) {
-        String userDirectoryPath = "user-" + id + "-files/";
+        String userDirectoryPath = USER_DIRECTORY_PATH.formatted(id);
         try {
             minioService.createDirectory(userDirectoryPath);
         } catch (Exception e) {
@@ -50,7 +52,7 @@ public class ResourceServiceImpl implements ResourceService {
 
         String fullRelativePath = buildPath(userId, path);
         if (!minioService.objectExists(fullRelativePath))
-            throw new IllegalArgumentException("Directory to upload does not exist");
+            throw new IllegalArgumentException("Target directory does not exist!");
 
         List<ResourceResponse> uploadedResources = new ArrayList<>();
         for (MultipartFile file : files) {
@@ -60,7 +62,7 @@ public class ResourceServiceImpl implements ResourceService {
                 throw new RuntimeException("File already exists: " + fileAbsolutePath);
             }
             minioService.uploadObject(fileAbsolutePath, file.getInputStream(), file.getSize(), file.getContentType());
-            uploadedResources.add(createResourceResponse(
+            uploadedResources.add(new ResourceResponse(
                     getCorrectResponsePath(fileAbsolutePath),
                     getFileOrFolderName(fileAbsolutePath),
                     file.getSize(),
@@ -83,7 +85,7 @@ public class ResourceServiceImpl implements ResourceService {
         ResourceResponse resourceResponse;
         try {
             StatObjectResponse objectInfo = minioService.getObjectInfo(absolutePath);
-            resourceResponse = createResourceResponse(
+            resourceResponse = new ResourceResponse(
                     getCorrectResponsePath(absolutePath),
                     getFileOrFolderName(absolutePath),
                     resourceType == ResourceType.FILE ? objectInfo.size() : null,
@@ -111,7 +113,7 @@ public class ResourceServiceImpl implements ResourceService {
         ResourceResponse resourceResponse;
         try {
             minioService.createDirectory(absolutePath);
-            resourceResponse = createResourceResponse(
+            resourceResponse = new ResourceResponse(
                     getCorrectResponsePath(absolutePath),
                     getFileOrFolderName(absolutePath),
                     null,
@@ -179,7 +181,7 @@ public class ResourceServiceImpl implements ResourceService {
             throw new RuntimeException("Target path already exists: " + absoluteToPath);
 
         if (from.endsWith("/") && !to.endsWith("/"))
-            throw new IllegalArgumentException("Invalid path: You can't move directory to file");
+            throw new IllegalArgumentException("Invalid path: you can't move directory to file!");
 
         ResourceType actualResourceType = extractResourceType(absoluteFromPath);
         try {
@@ -198,7 +200,35 @@ public class ResourceServiceImpl implements ResourceService {
 
     @Override
     public List<ResourceResponse> searchResources(Integer userId, String query) {
-        return List.of();
+        if (query == null || query.isBlank())
+            throw new IllegalArgumentException("Invalid query: 'query' must not be empty");
+
+        String userDirectoryPath = USER_DIRECTORY_PATH.formatted(userId);
+        List<ResourceResponse> resourceResponses = new ArrayList<>();
+
+        try {
+            Iterable<Result<Item>> results = minioService.listObjects(userDirectoryPath, true);
+
+            for (Result<Item> result : results) {
+                Item item = result.get();
+                String objectName = item.objectName();
+                String resourceName = getFileOrFolderName(objectName);
+
+                if (resourceName.toLowerCase().contains(query.toLowerCase())) {
+                    ResourceType resourceType = extractResourceType(objectName);
+
+                    resourceResponses.add(new ResourceResponse(
+                            getCorrectResponsePath(objectName),
+                            resourceName,
+                            resourceType == ResourceType.FILE ? item.size() : null,
+                            resourceType
+                    ));
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        return resourceResponses;
     }
 
     @Override
@@ -224,7 +254,8 @@ public class ResourceServiceImpl implements ResourceService {
         }
     }
 
-    private void deleteDirectoryRecursively(Iterable<Result<Item>> objects) throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
+    private void deleteDirectoryRecursively(Iterable<Result<Item>> objects) throws
+            ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
         for (Result<Item> result : objects) {
             minioService.deleteObject(result.get().objectName());
         }
@@ -238,15 +269,6 @@ public class ResourceServiceImpl implements ResourceService {
             String newPath = oldPath.replace(from, to);
             minioService.moveObject(oldPath, newPath);
         }
-    }
-
-    private ResourceResponse createResourceResponse(String path, String name, Long size, ResourceType type) {
-        return ResourceResponse.builder()
-                .path(path)
-                .name(name)
-                .type(type)
-                .size(size)
-                .build();
     }
 
     private String ensureTrailingSlash(String path) {
