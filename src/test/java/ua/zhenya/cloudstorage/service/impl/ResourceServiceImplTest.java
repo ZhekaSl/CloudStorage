@@ -302,12 +302,6 @@ class ResourceServiceImplTest extends BaseIntegrationTest {
             // Moving from root
             "random.txt, folder1/random.txt, folder1/, random.txt, FILE",
             "dir/, folder1/dir/, folder1/, dir, DIRECTORY",
-            // Moving to root
-            "folder1/random.txt, random.txt, /, random.txt, FILE",
-            "folder1/dir/, dir/, /, dir, DIRECTORY",
-            "random.txt, newname.txt, /, newname.txt, FILE",
-            "folder1/, newfolder/, /, newfolder, DIRECTORY",
-            "folder1/random.txt, random.txt, /, random.txt, FILE"
     })
     public void moveResource_shouldMoveResource(String from, String to, String expectedPath, String expectedFilename, ResourceType expectedType) throws Exception {
         MultipartFile multipartFileJpeg = new MockMultipartFile("file", TXT.getFilename(), "image/jpeg", TXT.getInputStream());
@@ -327,6 +321,41 @@ class ResourceServiceImplTest extends BaseIntegrationTest {
     }
 
     @ParameterizedTest
+    @CsvSource({
+            // Simple folder move one level up
+            "folder1/dir/, folder2/dir/, folder2/, dir",
+            // Move with renaming
+            "documents/archive/, backup/new_archive/, backup/, new_archive",
+            // Moving a folder with multiple nested levels
+            "workspace/main/configs/, workspace/backup/configs/, workspace/backup/, configs",
+            // Move a root folder into another directory
+            "rootFolder/, archive/rootFolder/, archive/, rootFolder",
+            // Move and rename simultaneously
+            "data/old_name/, data/new_name/, data/, new_name",
+            // Move a deeply nested structure
+            "x/y/z/a/b/c/, new_x/new_y/new_z/a/b/c/, new_x/new_y/new_z/a/b/, c"
+    })
+    public void moveResource_shouldMoveFolderWithContent(String from, String to, String expectedPath, String expectedFolderName) throws Exception {
+        MultipartFile[] multipartFiles = new MockMultipartFile[]{
+                new MockMultipartFile("file", TXT.getFilename(), "text/plain", TXT.getInputStream()),
+                new MockMultipartFile("file", JPEG.getFilename(), "image/jpeg", JPEG.getInputStream()),
+                new MockMultipartFile("file", "newFolder/" + JPEG.getFilename(), "image/jpeg", JPEG.getInputStream())
+        };
+        uploadDirectoryWithContent(USER_DIRECTORY_PATH + from, multipartFiles);
+        checkObjectsExistence(true, USER_DIRECTORY_PATH + from, multipartFiles);
+
+        ResourceResponse response = resourceService.moveResource(USER_1_ID, from, to);
+
+        assertNotNull(response);
+        assertEquals(expectedFolderName, response.getName());
+        assertEquals(expectedPath, response.getPath());
+        assertEquals(ResourceType.DIRECTORY, response.getType());
+
+        checkObjectsExistence(false, USER_DIRECTORY_PATH + from, multipartFiles);
+        checkObjectsExistence(true, USER_DIRECTORY_PATH + to, multipartFiles);
+    }
+
+    @ParameterizedTest
     @EmptySource
     @NullSource
     public void moveResource_throws_whenFromPathIsIncorrect(String from) {
@@ -342,11 +371,10 @@ class ResourceServiceImplTest extends BaseIntegrationTest {
 
     @ParameterizedTest
     @CsvSource({
-            "folder/innerfolder/, rootFile.txt",
             "folder/innerfolder/, rootFile",
             "folder/innerfolder/, folder/text.txt",
     })
-    public void moveResource_throws_whenFromIsDirectoryAndToIsFile(String from, String to) throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
+    public void moveResource_throws_whenMoveDirectoryToFile(String from, String to) throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
         minioService.createDirectory(USER_DIRECTORY_PATH + from);
 
         assertThrows(RuntimeException.class, () -> resourceService.moveResource(USER_1_ID, from, to));
@@ -354,7 +382,6 @@ class ResourceServiceImplTest extends BaseIntegrationTest {
 
     @ParameterizedTest
     @CsvSource({
-            // Проверка, что файл не найден
             "non-existent-file.txt, new-folder/newfile.txt",
             "non-existent-folder/, new-folder/",
     })
@@ -372,32 +399,6 @@ class ResourceServiceImplTest extends BaseIntegrationTest {
         createTestResource(USER_DIRECTORY_PATH + to, new MockMultipartFile("file", "file2.txt", "text/plain", TXT.getInputStream()));
 
         assertThrows(RuntimeException.class, () -> resourceService.moveResource(USER_1_ID, from, to));
-    }
-
-    @ParameterizedTest
-    @CsvSource({
-
-    })
-    public void moveResource_shouldMoveFolderWithContent() throws Exception {
-        String fromPath = "folder1/dir/";
-        String toPath = "folder2/dir/";
-        MultipartFile[] multipartFiles = new MockMultipartFile[]{
-                new MockMultipartFile("file", TXT.getFilename(), "text/plain", TXT.getInputStream()),
-                new MockMultipartFile("file", JPEG.getFilename(), "image/jpeg", JPEG.getInputStream()),
-                new MockMultipartFile("file", "newFolder/" + JPEG.getFilename(), "image/jpeg", JPEG.getInputStream())
-        };
-        uploadDirectoryWithContent(USER_DIRECTORY_PATH + fromPath, multipartFiles);
-        checkObjectsExistence(true, USER_DIRECTORY_PATH + fromPath, multipartFiles);
-
-        ResourceResponse response = resourceService.moveResource(USER_1_ID, fromPath, toPath);
-
-        assertNotNull(response);
-        assertEquals("dir", response.getName());
-        assertEquals("folder2/", response.getPath());
-        assertEquals(ResourceType.DIRECTORY, response.getType());
-
-        checkObjectsExistence(false, USER_DIRECTORY_PATH + fromPath, multipartFiles);
-        checkObjectsExistence(true, USER_DIRECTORY_PATH + toPath, multipartFiles);
     }
 
     @Test
