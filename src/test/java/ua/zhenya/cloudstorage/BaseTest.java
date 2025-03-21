@@ -12,21 +12,26 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Import;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.context.jdbc.SqlGroup;
+import org.springframework.web.multipart.MultipartFile;
 import org.testcontainers.containers.MinIOContainer;
+import ua.zhenya.cloudstorage.service.MinioService;
 
 import java.io.IOException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static ua.zhenya.cloudstorage.testdata.TestConstants.JPEG;
 
 @ActiveProfiles("test")
 @SqlGroup({
@@ -62,7 +67,7 @@ public abstract class BaseTest {
     }
 
     @BeforeEach
-    void createBucket() throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
+    void setUp() throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
         boolean found = minioClient.bucketExists(
                 BucketExistsArgs.builder().bucket(bucketName).build()
         );
@@ -89,5 +94,19 @@ public abstract class BaseTest {
     public <T, R> void assertElementsInOrder(List<T> items, Function<T, R> mapper, List<R> expected) {
         List<R> actualFields = items.stream().map(mapper).toList();
         assertThat(actualFields).containsExactlyElementsOf(expected);
+    }
+
+    public <T, R> void assertElementsInOrder(List<T> items, Function<T, R> mapper, MultipartFile[] expectedFiles, Function<MultipartFile, R> expectedMapper) {
+        List<R> actualFields = items.stream().map(mapper).toList();
+        List<R> expectedFields = Arrays.stream(expectedFiles).map(expectedMapper).toList();
+
+        assertThat(actualFields).containsExactlyElementsOf(expectedFields);
+    }
+
+    public <T, R> void assertElementsInOrder(List<T> items, Function<T, R> mapper, R[] expectedFiles, Integer id) {
+        List<R> actualFields = items.stream().map(mapper).toList();
+        List<R> expectedFields = Arrays.stream(expectedFiles).toList();
+
+        assertThat(actualFields).containsExactlyElementsOf(expectedFields);
     }
 }
