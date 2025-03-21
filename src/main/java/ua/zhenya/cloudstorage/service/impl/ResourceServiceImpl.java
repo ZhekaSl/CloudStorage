@@ -1,5 +1,7 @@
 package ua.zhenya.cloudstorage.service.impl;
 
+import com.fasterxml.jackson.core.JsonParseException;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import io.minio.Result;
 import io.minio.StatObjectResponse;
 import io.minio.errors.*;
@@ -102,7 +104,7 @@ public class ResourceServiceImpl implements ResourceService {
         if (minioService.objectExists(absolutePath))
             throw new RuntimeException("Resource already exists: " + absolutePath);
 
-        String relativePath = getRelativePath(absolutePath) + "/";
+        String relativePath = getRelativePath(absolutePath);
         if (!minioService.objectExists(relativePath))
             throw new RuntimeException("Parent directory not exists: " + relativePath);
 
@@ -123,7 +125,38 @@ public class ResourceServiceImpl implements ResourceService {
 
     @Override
     public List<ResourceResponse> getDirectoryContent(Integer userId, String path) {
-        return List.of();
+        if (path == null || !path.endsWith("/")) {
+            throw new RuntimeException("Invalid or missing path");
+        }
+
+        String absolutePath = buildPath(userId, path);
+        if (!minioService.objectExists(absolutePath))
+            throw new RuntimeException("Directory does not exist: " + absolutePath);
+
+        List<ResourceResponse> resourceResponses = new ArrayList<>();
+        try {
+            Iterable<Result<Item>> results = minioService.listObjects(absolutePath, false);
+            for (Result<Item> result : results) {
+                Item item = result.get();
+                String objectName = item.objectName();
+
+                if (objectName.equals(absolutePath)) {
+                    continue;
+                }
+
+                ResourceType resourceType = extractResourceType(objectName);
+                ResourceResponse resourceResponse = new ResourceResponse(
+                        getCorrectResponsePath(objectName),
+                        getFileOrFolderName(objectName),
+                        resourceType == ResourceType.FILE ? item.size() : null,
+                        resourceType
+                );
+                resourceResponses.add(resourceResponse);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        return resourceResponses;
     }
 
     @Override
@@ -134,26 +167,23 @@ public class ResourceServiceImpl implements ResourceService {
     @Override
     @Transactional
     public ResourceResponse moveResource(Integer userId, String from, String to) {
-        if (from == null || from.isBlank() || to == null || to.isBlank()) {
+        if (from == null || from.isBlank() || to == null || to.isBlank())
             throw new IllegalArgumentException("Invalid path: 'from' and 'to' must not be empty");
-        }
 
         String absoluteFromPath = buildPath(userId, from);
-        String absoluteToPath = buildPath(userId, to);
-
-        if (!minioService.objectExists(absoluteFromPath)) {
+        if (!minioService.objectExists(absoluteFromPath))
             throw new RuntimeException("Resource not found: " + absoluteFromPath);
-        }
 
-        if (minioService.objectExists(absoluteToPath)) {
+        String absoluteToPath = buildPath(userId, to);
+        if (minioService.objectExists(absoluteToPath))
             throw new RuntimeException("Target path already exists: " + absoluteToPath);
-        }
+
+        if (from.endsWith("/") && !to.endsWith("/"))
+            throw new IllegalArgumentException("Invalid path: You can't move directory to file");
 
         ResourceType actualResourceType = extractResourceType(absoluteFromPath);
         try {
-
             moveDirectoryRecursively(absoluteFromPath, absoluteToPath);
-
             StatObjectResponse objectInfo = minioService.getObjectInfo(absoluteToPath);
             return new ResourceResponse(
                     getCorrectResponsePath(absoluteToPath),
@@ -182,9 +212,8 @@ public class ResourceServiceImpl implements ResourceService {
             throw new RuntimeException("Resource does not exist: " + absolutePath);
 
         try {
-            Iterable<Result<Item>> objects = minioService.listObjects(absolutePath);
+            Iterable<Result<Item>> objects = minioService.listObjects(absolutePath, true);
             boolean isDirectory = objects.iterator().hasNext();
-
             if (isDirectory) {
                 deleteDirectoryRecursively(objects);
             } else {
@@ -202,7 +231,7 @@ public class ResourceServiceImpl implements ResourceService {
     }
 
     private void moveDirectoryRecursively(String from, String to) throws Exception {
-        Iterable<Result<Item>> objects = minioService.listObjects(from);
+        Iterable<Result<Item>> objects = minioService.listObjects(from, true);
 
         for (Result<Item> object : objects) {
             String oldPath = object.get().objectName();
@@ -253,7 +282,7 @@ public class ResourceServiceImpl implements ResourceService {
     private String buildPath(Integer userId, String path) {
         String userDirectory = USER_DIRECTORY_PATH.formatted(userId);
 
-        if (path == null || path.isBlank() || path.equals("/")) {
+        if (path.equals("/")) {
             return userDirectory;
         }
 
