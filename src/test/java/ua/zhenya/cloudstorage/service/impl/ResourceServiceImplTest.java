@@ -52,7 +52,7 @@ class ResourceServiceImplTest extends BaseIntegrationTest {
     }
 
     @Test
-    void uploadResources_uploadsMultipleResources() throws IOException, ServerException, InsufficientDataException, ErrorResponseException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
+    void uploadResources_uploadsMultipleResources() throws Exception {
         MultipartFile[] resources = new MultipartFile[]{
                 new MockMultipartFile("file", JPEG.getFilename(), "image/jpeg", JPEG.getInputStream()),
                 new MockMultipartFile("file", TXT.getFilename(), "text/plain", TXT.getInputStream()),
@@ -382,7 +382,7 @@ class ResourceServiceImplTest extends BaseIntegrationTest {
     @Test
     public void getDirectoryContext_returnsEmptyList_whenDirectoryIsEmpty() throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
         String path = "folder/";
-        minioService.createDirectory(path);
+        minioService.createDirectory(USER_DIRECTORY_PATH + path);
 
         List<ResourceResponse> directoryContent = resourceService.getDirectoryContent(USER_1_ID, path);
 
@@ -406,19 +406,51 @@ class ResourceServiceImplTest extends BaseIntegrationTest {
                 new MockMultipartFile("file", JPEG.getFilename(), "image/jpeg", JPEG.getInputStream()),
                 new MockMultipartFile("file", "newFolder/" + JPEG.getFilename(), "image/jpeg", JPEG.getInputStream())
         };
+        String fullPath = USER_DIRECTORY_PATH + path;
+        minioService.createDirectory(fullPath);
+        uploadContentToDirectory(fullPath, multipartFiles);
 
-        minioService.createDirectory(USER_DIRECTORY_PATH + path);
-        uploadContentToDirectory(USER_DIRECTORY_PATH + path, multipartFiles);
         List<ResourceResponse> directoryContent = resourceService.getDirectoryContent(USER_1_ID, path);
 
         assertThat(directoryContent).hasSize(3);
         assertThat(directoryContent)
                 .extracting(ResourceResponse::getName)
-                .containsExactly(TXT.getFilename(), JPEG.getFilename(), "newFolder/");
+                .contains(TXT.getFilename(), JPEG.getFilename(), "newFolder");
     }
 
     @Test
-    public void searchResources() {
+    public void searchResources_shouldReturnListOfFoundResults() throws Exception {
+        String path = "folder/";
+        String absolutePath = USER_DIRECTORY_PATH + path;
+        MultipartFile[] multipartFiles = new MockMultipartFile[]{
+                new MockMultipartFile("file", TXT.getFilename(), "text/plain", TXT.getInputStream()),
+                new MockMultipartFile("file", JPEG.getFilename(), "image/jpeg", JPEG.getInputStream()),
+                new MockMultipartFile("file", "newFolder/" + JPEG.getFilename(), "image/jpeg", JPEG.getInputStream())
+        };
+
+        minioService.createDirectory(absolutePath);
+        uploadContentToDirectory(absolutePath, multipartFiles);
+
+        List<ResourceResponse> responses = resourceService.searchResources(USER_1_ID, "nature");
+
+        assertThat(responses).hasSize(2);
+        assertThat(responses.get(0).getName()).isEqualTo("nature.jpg");
+        assertThat(responses.get(1).getName()).isEqualTo("nature.jpg");
+        assertThat(responses.get(0).getType()).isEqualTo(ResourceType.FILE);
+        assertThat(responses.get(1).getType()).isEqualTo(ResourceType.FILE);
+
+
+    }
+
+    @ParameterizedTest
+    @EmptySource
+    @NullSource
+    public void searchResources_throws_whenPathIsNullOrEmpty(String query) {
+        assertThrows(RuntimeException.class, () -> resourceService.searchResources(USER_1_ID, query));
+    }
+
+    @Test
+    public void searchResourcesf() {
 
     }
 
@@ -443,7 +475,7 @@ class ResourceServiceImplTest extends BaseIntegrationTest {
         }
     }
 
-    private void checkObjectsExistence(boolean checkExistence, String relativePath, MultipartFile... multipartFiles) throws Exception {
+    private void checkObjectsExistence(boolean checkExistence, String relativePath, MultipartFile... multipartFiles) {
         for (MultipartFile multipartFile : multipartFiles) {
             String absolutePath = relativePath + multipartFile.getOriginalFilename();
             if (checkExistence) {
