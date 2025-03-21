@@ -77,11 +77,11 @@ public class MinioServiceImpl implements MinioService {
                 .build());
     }
 
-    public Iterable<Result<Item>> listObjects(String path) {
+    public Iterable<Result<Item>> listObjects(String path, boolean recursive) {
         return minioClient.listObjects(ListObjectsArgs.builder()
                 .bucket(minioProperties.getBucketName())
                 .prefix(path)
-                .recursive(true)
+                .recursive(recursive)
                 .build());
     }
 
@@ -102,17 +102,16 @@ public class MinioServiceImpl implements MinioService {
     }
 
     @Override
-    public boolean objectExists(String objectName) {
-        try {
-            minioClient.statObject(StatObjectArgs.builder()
-                    .bucket(minioProperties.getBucketName())
-                    .object(objectName)
-                    .build());
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
+    public boolean objectExists(String path) {
+        Iterable<Result<Item>> results = minioClient.listObjects(ListObjectsArgs.builder()
+                .bucket(minioProperties.getBucketName())
+                .prefix(path)
+                .maxKeys(1)
+                .build());
+
+        return results.iterator().hasNext();
     }
+
 
     private void createBucket() throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
         String bucketName = minioProperties.getBucketName();

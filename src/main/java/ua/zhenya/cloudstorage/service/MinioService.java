@@ -19,7 +19,7 @@ public interface MinioService {
 
     GetObjectResponse getObject(String fullPath) throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException;
 
-    Iterable<Result<Item>> listObjects(String path);
+    Iterable<Result<Item>> listObjects(String path, boolean recursive);
 
     void deleteObject(String fullPath) throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException;
 
