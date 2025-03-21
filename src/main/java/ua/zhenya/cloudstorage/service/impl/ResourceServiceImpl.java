@@ -7,6 +7,7 @@ import io.minio.messages.Item;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import ua.zhenya.cloudstorage.dto.ResourceResponse;
 import ua.zhenya.cloudstorage.dto.ResourceType;
@@ -25,6 +26,7 @@ import static ua.zhenya.cloudstorage.utils.Constants.*;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class ResourceServiceImpl implements ResourceService {
     private final MinioService minioService;
 
@@ -39,25 +41,23 @@ public class ResourceServiceImpl implements ResourceService {
 
     @Override
     @SneakyThrows
+    @Transactional
     public List<ResourceResponse> uploadResources(Integer userId, String path, MultipartFile[] files) {
-        if (files == null || files.length == 0) {
-            throw new IllegalArgumentException("No files provided");
-        }
-        List<ResourceResponse> uploadedResources = new ArrayList<>();
-        String fullRelativePath = buildPath(userId, path);
+        if (path == null || !path.endsWith("/"))
+            throw new IllegalArgumentException("Invalid path");
 
+        String fullRelativePath = buildPath(userId, path);
+        if (!minioService.objectExists(fullRelativePath))
+            throw new IllegalArgumentException("Directory to upload does not exist");
+
+        List<ResourceResponse> uploadedResources = new ArrayList<>();
         for (MultipartFile file : files) {
             String originalFilename = file.getOriginalFilename();
-            if (originalFilename == null || originalFilename.isBlank()) {
-                throw new IllegalArgumentException("Invalid file name");
-            }
             String fileAbsolutePath = fullRelativePath + originalFilename;
             if (minioService.objectExists(fileAbsolutePath)) {
                 throw new RuntimeException("File already exists: " + fileAbsolutePath);
             }
-
             minioService.uploadObject(fileAbsolutePath, file.getInputStream(), file.getSize(), file.getContentType());
-
             uploadedResources.add(createResourceResponse(
                     getCorrectResponsePath(fileAbsolutePath),
                     getFileOrFolderName(fileAbsolutePath),
@@ -70,7 +70,13 @@ public class ResourceServiceImpl implements ResourceService {
 
     @Override
     public ResourceResponse getResourceInfo(Integer userId, String path) {
+        if (path == null || path.isEmpty())
+            throw new IllegalArgumentException("Invalid path");
+
         String absolutePath = buildPath(userId, path);
+        if (!minioService.objectExists(absolutePath))
+            throw new IllegalArgumentException("Resource does not exist: " + path);
+
         ResourceType resourceType = extractResourceType(absolutePath);
         ResourceResponse resourceResponse;
         try {
@@ -80,27 +86,39 @@ public class ResourceServiceImpl implements ResourceService {
                     getFileOrFolderName(absolutePath),
                     resourceType == ResourceType.FILE ? objectInfo.size() : null,
                     resourceType);
-        } catch (IOException | ServerException | InsufficientDataException | ErrorResponseException |
-                 NoSuchAlgorithmException | InvalidKeyException | InvalidResponseException | XmlParserException |
-                 InternalException e) {
-            throw new RuntimeException("Error uploading file: ", e);
+        } catch (Exception e) {
+            throw new RuntimeException("Error on getting resource info: ", e);
         }
         return resourceResponse;
     }
 
     @Override
+    @Transactional
     public ResourceResponse createDirectory(Integer userId, String path) {
-        String fullPath = String.format("user-%d-files/%s/", userId, path);
-        String folderName = path.substring(path.lastIndexOf('/') + 1);
+        if (path == null || !path.endsWith("/"))
+            throw new IllegalArgumentException("Invalid path");
+
+        String absolutePath = buildPath(userId, path);
+        if (minioService.objectExists(absolutePath))
+            throw new RuntimeException("Resource already exists: " + absolutePath);
+
+        String relativePath = getRelativePath(absolutePath) + "/";
+        if (!minioService.objectExists(relativePath))
+            throw new RuntimeException("Parent directory not exists: " + relativePath);
+
+        ResourceResponse resourceResponse;
         try {
-            minioService.createDirectory(fullPath);
+            minioService.createDirectory(absolutePath);
+            resourceResponse = createResourceResponse(
+                    getCorrectResponsePath(absolutePath),
+                    getFileOrFolderName(absolutePath),
+                    null,
+                    ResourceType.DIRECTORY
+            );
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Something went wrong", e.getCause());
         }
-        return ResourceResponse.builder()
-                .path(path)
-                .name(folderName)
-                .build();
+        return resourceResponse;
     }
 
     @Override
@@ -114,8 +132,38 @@ public class ResourceServiceImpl implements ResourceService {
     }
 
     @Override
+    @Transactional
     public ResourceResponse moveResource(Integer userId, String from, String to) {
-        return null;
+        if (from == null || from.isBlank() || to == null || to.isBlank()) {
+            throw new IllegalArgumentException("Invalid path: 'from' and 'to' must not be empty");
+        }
+
+        String absoluteFromPath = buildPath(userId, from);
+        String absoluteToPath = buildPath(userId, to);
+
+        if (!minioService.objectExists(absoluteFromPath)) {
+            throw new RuntimeException("Resource not found: " + absoluteFromPath);
+        }
+
+        if (minioService.objectExists(absoluteToPath)) {
+            throw new RuntimeException("Target path already exists: " + absoluteToPath);
+        }
+
+        ResourceType actualResourceType = extractResourceType(absoluteFromPath);
+        try {
+
+            moveDirectoryRecursively(absoluteFromPath, absoluteToPath);
+
+            StatObjectResponse objectInfo = minioService.getObjectInfo(absoluteToPath);
+            return new ResourceResponse(
+                    getCorrectResponsePath(absoluteToPath),
+                    getFileOrFolderName(absoluteToPath),
+                    actualResourceType == ResourceType.FILE ? objectInfo.size() : null,
+                    actualResourceType
+            );
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
@@ -124,18 +172,20 @@ public class ResourceServiceImpl implements ResourceService {
     }
 
     @Override
+    @Transactional
     public void deleteResource(Integer userId, String path) {
         if (path == null || path.isBlank())
             throw new IllegalArgumentException("Invalid path");
 
         String absolutePath = buildPath(userId, path);
+        if (!minioService.objectExists(absolutePath))
+            throw new RuntimeException("Resource does not exist: " + absolutePath);
+
         try {
             Iterable<Result<Item>> objects = minioService.listObjects(absolutePath);
+            boolean isDirectory = objects.iterator().hasNext();
 
-            if (!minioService.objectExists(absolutePath))
-                throw new RuntimeException("File does not exist: " + absolutePath);
-
-            if (objects.iterator().hasNext()) {
+            if (isDirectory) {
                 deleteDirectoryRecursively(objects);
             } else {
                 minioService.deleteObject(absolutePath);
@@ -148,6 +198,16 @@ public class ResourceServiceImpl implements ResourceService {
     private void deleteDirectoryRecursively(Iterable<Result<Item>> objects) throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
         for (Result<Item> result : objects) {
             minioService.deleteObject(result.get().objectName());
+        }
+    }
+
+    private void moveDirectoryRecursively(String from, String to) throws Exception {
+        Iterable<Result<Item>> objects = minioService.listObjects(from);
+
+        for (Result<Item> object : objects) {
+            String oldPath = object.get().objectName();
+            String newPath = oldPath.replace(from, to);
+            minioService.moveObject(oldPath, newPath);
         }
     }
 
@@ -173,12 +233,10 @@ public class ResourceServiceImpl implements ResourceService {
     }
 
     private String getRelativePath(String absolutePath) {
-        // Проверяем на пустоту и null
         if (absolutePath == null || absolutePath.isEmpty()) {
             return "/";
         }
 
-        // Если путь заканчивается на слеш, убираем его
         if (absolutePath.endsWith("/")) {
             absolutePath = absolutePath.substring(0, absolutePath.length() - 1);
         }
@@ -189,7 +247,7 @@ public class ResourceServiceImpl implements ResourceService {
             return absolutePath;
         }
 
-        return absolutePath.substring(0, lastSlashIndex);
+        return ensureTrailingSlash(absolutePath.substring(0, lastSlashIndex));
     }
 
     private String buildPath(Integer userId, String path) {
@@ -199,11 +257,11 @@ public class ResourceServiceImpl implements ResourceService {
             return userDirectory;
         }
 
-        return userDirectory + path; // Не добавляем слеш к файлу
+        return userDirectory + path;
     }
 
     private String getCorrectResponsePath(String absolutePath) {
-        String relativePath = getRelativePath(absolutePath) + "/";
+        String relativePath = getRelativePath(absolutePath);
 
         int firstSlashIndex = relativePath.indexOf("/");
         if (firstSlashIndex == -1) {
