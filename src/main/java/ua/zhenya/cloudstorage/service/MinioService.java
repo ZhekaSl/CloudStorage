@@ -2,8 +2,12 @@ package ua.zhenya.cloudstorage.service;
 
 import io.minio.GetObjectResponse;
 import io.minio.ObjectWriteResponse;
+import io.minio.Result;
 import io.minio.StatObjectResponse;
 import io.minio.errors.*;
+import io.minio.messages.DeleteError;
+import io.minio.messages.DeleteObject;
+import io.minio.messages.Item;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -15,7 +19,11 @@ public interface MinioService {
 
     GetObjectResponse getObject(String fullPath) throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException;
 
+    Iterable<Result<Item>> listObjects(String path);
+
     void deleteObject(String fullPath) throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException;
+
+    Iterable<Result<DeleteError>> deleteObjects(Iterable<DeleteObject> objects);
 
     ObjectWriteResponse uploadObject(String path, InputStream inputStream, long size, String contentType) throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException;
 

@@ -2,6 +2,9 @@ package ua.zhenya.cloudstorage.service.impl;
 
 import io.minio.*;
 import io.minio.errors.*;
+import io.minio.messages.DeleteError;
+import io.minio.messages.DeleteObject;
+import io.minio.messages.Item;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -13,6 +16,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 @Service
 @RequiredArgsConstructor
@@ -48,6 +54,13 @@ public class MinioServiceImpl implements MinioService {
                 .build());
     }
 
+    public Iterable<Result<DeleteError>> deleteObjects(Iterable<DeleteObject> objects) {
+        return minioClient.removeObjects(RemoveObjectsArgs.builder()
+                .bucket(minioProperties.getBucketName())
+                .objects(objects)
+                .build());
+    }
+
     public ObjectWriteResponse uploadObject(String path, InputStream inputStream, long size, String contentType) throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
         return minioClient.putObject(PutObjectArgs.builder()
                 .bucket(minioProperties.getBucketName())
@@ -61,6 +74,14 @@ public class MinioServiceImpl implements MinioService {
         return minioClient.statObject(StatObjectArgs.builder()
                 .bucket(minioProperties.getBucketName())
                 .object(path)
+                .build());
+    }
+
+    public Iterable<Result<Item>> listObjects(String path) {
+        return minioClient.listObjects(ListObjectsArgs.builder()
+                .bucket(minioProperties.getBucketName())
+                .prefix(path)
+                .recursive(true)
                 .build());
     }
 
