@@ -322,7 +322,6 @@ class ResourceServiceImplTest extends BaseIntegrationTest {
         assertEquals(expectedType, resourceInfo.getType());
         assertEquals(expectedSize, resourceInfo.getSize());
 
-
         assertFalse(minioService.objectExists(USER_DIRECTORY_PATH + from));
         assertTrue(minioService.objectExists(USER_DIRECTORY_PATH + to));
     }
@@ -339,6 +338,18 @@ class ResourceServiceImplTest extends BaseIntegrationTest {
     @NullSource
     public void moveResource_throws_whenToPathIsIncorrect(String to) {
         assertThrows(RuntimeException.class, () -> resourceService.moveResource(USER_1_ID, "valid/text.txt", to));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "folder/innerfolder/, rootFile.txt",
+            "folder/innerfolder/, rootFile",
+            "folder/innerfolder/, folder/text.txt",
+    })
+    public void moveResource_throws_whenFromIsDirectoryAndToIsFile(String from, String to) throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
+        minioService.createDirectory(USER_DIRECTORY_PATH + from);
+
+        assertThrows(RuntimeException.class, () -> resourceService.moveResource(USER_1_ID, from, to));
     }
 
     @ParameterizedTest
@@ -363,7 +374,10 @@ class ResourceServiceImplTest extends BaseIntegrationTest {
         assertThrows(RuntimeException.class, () -> resourceService.moveResource(USER_1_ID, from, to));
     }
 
-    @Test
+    @ParameterizedTest
+    @CsvSource({
+
+    })
     public void moveResource_shouldMoveFolderWithContent() throws Exception {
         String fromPath = "folder1/dir/";
         String toPath = "folder2/dir/";
