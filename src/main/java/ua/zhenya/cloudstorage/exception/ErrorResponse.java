@@ -1,8 +1,10 @@
 package ua.zhenya.cloudstorage.exception;
 
-import lombok.Getter;
+import lombok.AllArgsConstructor;
+import lombok.Data;
 
-@Getter
+@Data
+@AllArgsConstructor
 public class ErrorResponse {
     String message;
 }
