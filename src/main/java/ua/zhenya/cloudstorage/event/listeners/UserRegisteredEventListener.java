@@ -1,9 +1,7 @@
 package ua.zhenya.cloudstorage.event.listeners;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionalEventListener;
 import ua.zhenya.cloudstorage.event.UserRegisteredEvent;
 import ua.zhenya.cloudstorage.model.User;

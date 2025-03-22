@@ -64,9 +64,11 @@ public class ResourceServiceImpl implements ResourceService {
             for (MultipartFile file : files) {
                 String originalFilename = file.getOriginalFilename();
                 String fileAbsolutePath = fullRelativePath + originalFilename;
-                if (minioService.objectExists(fileAbsolutePath)) {
+                createIntermediateDirectoriesIfNeeded(fileAbsolutePath);
+
+                if (minioService.objectExists(fileAbsolutePath))
                     throw new CloudStorageException("File already exists!", HttpStatus.CONFLICT);
-                }
+
                 minioService.uploadObject(fileAbsolutePath, file.getInputStream(), file.getSize(), file.getContentType());
                 uploadedResources.add(new ResourceResponse(
                         getCorrectResponsePath(fileAbsolutePath),
@@ -133,9 +135,8 @@ public class ResourceServiceImpl implements ResourceService {
 
     @Override
     public List<ResourceResponse> getDirectoryContent(Integer userId, String path) {
-        if (!isDirectory(path)) {
+        if (!isDirectory(path))
             throw new CloudStorageException("Invalid path: must be a directory!", HttpStatus.BAD_REQUEST);
-        }
 
         String absolutePath = buildPath(userId, path);
         if (!minioService.objectExists(absolutePath))
@@ -148,9 +149,8 @@ public class ResourceServiceImpl implements ResourceService {
                 Item item = result.get();
                 String objectName = item.objectName();
 
-                if (objectName.equals(absolutePath)) {
+                if (objectName.equals(absolutePath))
                     continue;
-                }
 
                 ResourceType resourceType = extractResourceType(objectName);
                 ResourceResponse resourceResponse = new ResourceResponse(
