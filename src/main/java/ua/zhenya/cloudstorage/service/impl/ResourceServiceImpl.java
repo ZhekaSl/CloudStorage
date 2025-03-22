@@ -1,8 +1,5 @@
 package ua.zhenya.cloudstorage.service.impl;
 
-import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.databind.JsonMappingException;
-import io.minio.ListObjectsArgs;
 import io.minio.Result;
 import io.minio.StatObjectResponse;
 import io.minio.errors.*;
@@ -21,11 +18,9 @@ import ua.zhenya.cloudstorage.dto.ResourceType;
 import ua.zhenya.cloudstorage.service.MinioService;
 import ua.zhenya.cloudstorage.service.ResourceService;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Paths;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -34,6 +29,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 import static ua.zhenya.cloudstorage.utils.Constants.*;
+import static ua.zhenya.cloudstorage.utils.PathUtils.*;
 
 @Service
 @RequiredArgsConstructor
@@ -53,10 +49,9 @@ public class ResourceServiceImpl implements ResourceService {
     }
 
     @Override
-    @SneakyThrows
     @Transactional
     public List<ResourceResponse> uploadResources(Integer userId, String path, MultipartFile[] files) {
-        if (path == null || !path.endsWith("/"))
+        if (path == null || !isDirectory(path))
             throw new IllegalArgumentException("Invalid path");
 
         String fullRelativePath = buildPath(userId, path);
@@ -64,19 +59,23 @@ public class ResourceServiceImpl implements ResourceService {
             throw new IllegalArgumentException("Target directory does not exist!");
 
         List<ResourceResponse> uploadedResources = new ArrayList<>();
-        for (MultipartFile file : files) {
-            String originalFilename = file.getOriginalFilename();
-            String fileAbsolutePath = fullRelativePath + originalFilename;
-            if (minioService.objectExists(fileAbsolutePath)) {
-                throw new RuntimeException("File already exists: " + fileAbsolutePath);
+        try {
+            for (MultipartFile file : files) {
+                String originalFilename = file.getOriginalFilename();
+                String fileAbsolutePath = fullRelativePath + originalFilename;
+                if (minioService.objectExists(fileAbsolutePath)) {
+                    throw new RuntimeException("File already exists: " + fileAbsolutePath);
+                }
+                minioService.uploadObject(fileAbsolutePath, file.getInputStream(), file.getSize(), file.getContentType());
+                uploadedResources.add(new ResourceResponse(
+                        getCorrectResponsePath(fileAbsolutePath),
+                        getFileOrFolderName(fileAbsolutePath),
+                        file.getSize(),
+                        ResourceType.FILE
+                ));
             }
-            minioService.uploadObject(fileAbsolutePath, file.getInputStream(), file.getSize(), file.getContentType());
-            uploadedResources.add(new ResourceResponse(
-                    getCorrectResponsePath(fileAbsolutePath),
-                    getFileOrFolderName(fileAbsolutePath),
-                    file.getSize(),
-                    ResourceType.FILE
-            ));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
         return uploadedResources;
     }
@@ -108,7 +107,7 @@ public class ResourceServiceImpl implements ResourceService {
     @Override
     @Transactional
     public ResourceResponse createDirectory(Integer userId, String path) {
-        if (path == null || !path.endsWith("/"))
+        if (path == null || !isDirectory(path))
             throw new IllegalArgumentException("Invalid path");
 
         String absolutePath = buildPath(userId, path);
@@ -136,7 +135,7 @@ public class ResourceServiceImpl implements ResourceService {
 
     @Override
     public List<ResourceResponse> getDirectoryContent(Integer userId, String path) {
-        if (path == null || !path.endsWith("/")) {
+        if (path == null || !isDirectory(path)) {
             throw new RuntimeException("Invalid or missing path");
         }
 
@@ -185,7 +184,7 @@ public class ResourceServiceImpl implements ResourceService {
             String filename;
             Resource content;
 
-            if (absolutePath.endsWith("/")) {
+            if (isDirectory(absolutePath)) {
                 content = createZipArchive(absolutePath);
                 filename = getFileOrFolderName(absolutePath) + ".zip";
             } else {
@@ -212,9 +211,9 @@ public class ResourceServiceImpl implements ResourceService {
             Item item = result.get();
             String objectName = item.objectName();
 
-            if (objectName.equals(directoryPath) || objectName.endsWith("/")) {
+            if (objectName.equals(directoryPath) || isDirectory(objectName))
                 continue;
-            }
+
             try (InputStream inputStream = minioService.getObject(objectName)) {
                 String relativePath = objectName.substring(directoryPath.length());
                 ZipEntry zipEntry = new ZipEntry(relativePath);
@@ -228,9 +227,7 @@ public class ResourceServiceImpl implements ResourceService {
                 zos.closeEntry();
             }
         }
-
-        // Если нет файлов, просто закрываем архив, оставляя его пустым
-        zos.close();
+        zos.finish();
         return new ByteArrayResource(baos.toByteArray());
     }
 
@@ -248,11 +245,11 @@ public class ResourceServiceImpl implements ResourceService {
         if (minioService.objectExists(absoluteToPath))
             throw new RuntimeException("Target path already exists: " + absoluteToPath);
 
-        if (absoluteFromPath.endsWith("/") && !absoluteToPath.endsWith("/"))
+        if (isDirectory(absoluteFromPath) && !isDirectory(absoluteToPath))
             throw new RuntimeException("Invalid path: " + absoluteToPath);
 
         try {
-            if (to.endsWith("/"))
+            if (isDirectory(to))
                 createEmptyObjectIfNotExist(absoluteToPath);
 
             ResourceType actualResourceType = extractResourceType(absoluteFromPath);
@@ -318,7 +315,8 @@ public class ResourceServiceImpl implements ResourceService {
         }
     }
 
-    private void deleteDirectoryRecursively(String absolutePath) throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
+    private void deleteDirectoryRecursively(String absolutePath) throws
+            ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
         Iterable<Result<Item>> objects = minioService.listObjects(absolutePath, true);
 
         for (Result<Item> result : objects) {
@@ -353,61 +351,5 @@ public class ResourceServiceImpl implements ResourceService {
             String directoryPath = currentDirPath.toString();
             createEmptyObjectIfNotExist(directoryPath);
         }
-    }
-
-    private String ensureTrailingSlash(String path) {
-        return path.endsWith("/") ? path : path + "/";
-    }
-
-    private String getFileOrFolderName(String path) {
-        if (path.endsWith("/")) {
-            path = path.substring(0, path.length() - 1);
-        }
-
-        return Paths.get(path).getFileName().toString();
-    }
-
-    private String getRelativePath(String absolutePath) {
-        if (absolutePath == null || absolutePath.isEmpty()) {
-            return "/";
-        }
-
-        if (absolutePath.endsWith("/")) {
-            absolutePath = absolutePath.substring(0, absolutePath.length() - 1);
-        }
-
-        int lastSlashIndex = absolutePath.lastIndexOf("/");
-
-        if (lastSlashIndex == -1) {
-            return absolutePath;
-        }
-
-        return ensureTrailingSlash(absolutePath.substring(0, lastSlashIndex));
-    }
-
-    private String buildPath(Integer userId, String path) {
-        String userDirectory = USER_DIRECTORY_PATH.formatted(userId);
-
-        if (path.equals("/")) {
-            return userDirectory;
-        }
-
-        return userDirectory + path;
-    }
-
-    private String getCorrectResponsePath(String absolutePath) {
-        String relativePath = getRelativePath(absolutePath);
-
-        int firstSlashIndex = relativePath.indexOf("/");
-        if (firstSlashIndex == -1) {
-            return "/";
-        }
-
-        String trimmedPath = relativePath.substring(firstSlashIndex + 1);
-        return trimmedPath.isBlank() ? "/" : trimmedPath;
-    }
-
-    private ResourceType extractResourceType(String absolutePath) {
-        return absolutePath.endsWith("/") ? ResourceType.DIRECTORY : ResourceType.FILE;
     }
 }
