@@ -2,20 +2,27 @@ package ua.zhenya.cloudstorage.service.impl;
 
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
+import io.minio.ListObjectsArgs;
 import io.minio.Result;
 import io.minio.StatObjectResponse;
 import io.minio.errors.*;
 import io.minio.messages.Item;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import ua.zhenya.cloudstorage.dto.ResourceDownloadResponse;
 import ua.zhenya.cloudstorage.dto.ResourceResponse;
 import ua.zhenya.cloudstorage.dto.ResourceType;
 import ua.zhenya.cloudstorage.service.MinioService;
 import ua.zhenya.cloudstorage.service.ResourceService;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Paths;
@@ -23,6 +30,8 @@ import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import static ua.zhenya.cloudstorage.utils.Constants.*;
 
@@ -162,8 +171,67 @@ public class ResourceServiceImpl implements ResourceService {
     }
 
     @Override
-    public InputStream downloadResource(Integer userId, String path) {
-        return null;
+    public ResourceDownloadResponse downloadResource(Integer userId, String path) {
+        if (path == null || path.isBlank()) {
+            throw new IllegalArgumentException("Invalid path: 'path' must not be empty");
+        }
+
+        String absolutePath = buildPath(userId, path);
+        if (!minioService.objectExists(absolutePath)) {
+            throw new RuntimeException("Resource not found: " + absolutePath);
+        }
+
+        try {
+            String filename;
+            Resource content;
+
+            if (absolutePath.endsWith("/")) {
+                content = createZipArchive(absolutePath);
+                filename = getFileOrFolderName(absolutePath) + ".zip";
+            } else {
+                InputStream fileInputStream = minioService.getObject(absolutePath);
+                content = new InputStreamResource(fileInputStream);
+                filename = getFileOrFolderName(absolutePath);
+            }
+            return new ResourceDownloadResponse(filename, content);
+        } catch (Exception e) {
+            throw new RuntimeException("Error while downloading resource", e);
+        }
+    }
+
+    private Resource createZipArchive(String directoryPath) throws IOException, ServerException, InsufficientDataException,
+            ErrorResponseException, NoSuchAlgorithmException, InvalidKeyException,
+            InvalidResponseException, XmlParserException, InternalException {
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ZipOutputStream zos = new ZipOutputStream(baos);
+
+        Iterable<Result<Item>> objects = minioService.listObjects(directoryPath, true);
+
+        for (Result<Item> result : objects) {
+            Item item = result.get();
+            String objectName = item.objectName();
+
+            if (objectName.equals(directoryPath) || objectName.endsWith("/")) {
+                continue;
+            }
+            try (InputStream inputStream = minioService.getObject(objectName)) {
+                String relativePath = objectName.substring(directoryPath.length());
+                ZipEntry zipEntry = new ZipEntry(relativePath);
+                zos.putNextEntry(zipEntry);
+
+                byte[] buffer = new byte[1024];
+                int length;
+                while ((length = inputStream.read(buffer)) > 0) {
+                    zos.write(buffer, 0, length);
+                }
+                zos.closeEntry();
+            }
+        }
+
+        // Если нет файлов, просто закрываем архив, оставляя его пустым
+        zos.close();
+        return new ByteArrayResource(baos.toByteArray());
     }
 
     @Override
@@ -180,13 +248,17 @@ public class ResourceServiceImpl implements ResourceService {
         if (minioService.objectExists(absoluteToPath))
             throw new RuntimeException("Target path already exists: " + absoluteToPath);
 
-        if (from.endsWith("/") && !to.endsWith("/"))
-            throw new IllegalArgumentException("Invalid path: you can't move directory to file!");
+        if (absoluteFromPath.endsWith("/") && !absoluteToPath.endsWith("/"))
+            throw new RuntimeException("Invalid path: " + absoluteToPath);
 
-        ResourceType actualResourceType = extractResourceType(absoluteFromPath);
         try {
+            if (to.endsWith("/"))
+                createEmptyObjectIfNotExist(absoluteToPath);
+
+            ResourceType actualResourceType = extractResourceType(absoluteFromPath);
             moveDirectoryRecursively(absoluteFromPath, absoluteToPath);
             StatObjectResponse objectInfo = minioService.getObjectInfo(absoluteToPath);
+
             return new ResourceResponse(
                     getCorrectResponsePath(absoluteToPath),
                     getFileOrFolderName(absoluteToPath),
@@ -205,10 +277,8 @@ public class ResourceServiceImpl implements ResourceService {
 
         String userDirectoryPath = USER_DIRECTORY_PATH.formatted(userId);
         List<ResourceResponse> resourceResponses = new ArrayList<>();
-
         try {
             Iterable<Result<Item>> results = minioService.listObjects(userDirectoryPath, true);
-
             for (Result<Item> result : results) {
                 Item item = result.get();
                 String objectName = item.objectName();
@@ -242,32 +312,46 @@ public class ResourceServiceImpl implements ResourceService {
             throw new RuntimeException("Resource does not exist: " + absolutePath);
 
         try {
-            Iterable<Result<Item>> objects = minioService.listObjects(absolutePath, true);
-            boolean isDirectory = objects.iterator().hasNext();
-            if (isDirectory) {
-                deleteDirectoryRecursively(objects);
-            } else {
-                minioService.deleteObject(absolutePath);
-            }
+            deleteDirectoryRecursively(absolutePath);
         } catch (Exception e) {
             throw new RuntimeException("Something went wrong");
         }
     }
 
-    private void deleteDirectoryRecursively(Iterable<Result<Item>> objects) throws
-            ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
+    private void deleteDirectoryRecursively(String absolutePath) throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
+        Iterable<Result<Item>> objects = minioService.listObjects(absolutePath, true);
+
         for (Result<Item> result : objects) {
             minioService.deleteObject(result.get().objectName());
+        }
+    }
+
+    private void createEmptyObjectIfNotExist(String path) throws Exception {
+        if (!minioService.objectExists(path)) {
+            minioService.createDirectory(path);
         }
     }
 
     private void moveDirectoryRecursively(String from, String to) throws Exception {
         Iterable<Result<Item>> objects = minioService.listObjects(from, true);
 
-        for (Result<Item> object : objects) {
-            String oldPath = object.get().objectName();
+        for (Result<Item> result : objects) {
+            String oldPath = result.get().objectName();
             String newPath = oldPath.replace(from, to);
+            createIntermediateDirectoriesIfNeeded(newPath);
+
             minioService.moveObject(oldPath, newPath);
+        }
+    }
+
+    private void createIntermediateDirectoriesIfNeeded(String path) throws Exception {
+        String[] pathParts = path.split("/");
+
+        StringBuilder currentDirPath = new StringBuilder();
+        for (int i = 0; i < pathParts.length - 1; i++) {
+            currentDirPath.append(pathParts[i]).append("/");
+            String directoryPath = currentDirPath.toString();
+            createEmptyObjectIfNotExist(directoryPath);
         }
     }
 

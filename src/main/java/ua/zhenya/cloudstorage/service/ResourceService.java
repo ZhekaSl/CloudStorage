@@ -1,6 +1,8 @@
 package ua.zhenya.cloudstorage.service;
 
+import org.springframework.core.io.Resource;
 import org.springframework.web.multipart.MultipartFile;
+import ua.zhenya.cloudstorage.dto.ResourceDownloadResponse;
 import ua.zhenya.cloudstorage.dto.ResourceResponse;
 
 import java.io.InputStream;
@@ -19,7 +21,7 @@ public interface ResourceService {
 
     void deleteResource(Integer userId, String path);
 
-    InputStream downloadResource(Integer userId, String path);
+    ResourceDownloadResponse downloadResource(Integer userId, String path);
 
     ResourceResponse moveResource(Integer userId, String from, String to);
 
