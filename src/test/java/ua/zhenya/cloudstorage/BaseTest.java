@@ -2,17 +2,12 @@ package ua.zhenya.cloudstorage;
 
 import io.minio.*;
 import io.minio.errors.*;
-import io.minio.messages.DeleteObject;
 import io.minio.messages.Item;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Import;
-import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -23,16 +18,23 @@ import org.testcontainers.containers.MinIOContainer;
 import ua.zhenya.cloudstorage.service.MinioService;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static ua.zhenya.cloudstorage.testdata.TestConstants.JPEG;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static ua.zhenya.cloudstorage.testdata.TestConstants.USER_DIRECTORY_PATH;
 
 @ActiveProfiles("test")
@@ -119,10 +121,107 @@ public abstract class BaseTest {
         assertThat(actualFields).containsExactlyElementsOf(expectedFields);
     }
 
-    public <T, R> void assertElementsInOrder(List<T> items, Function<T, R> mapper, R[] expectedFiles, Integer id) {
-        List<R> actualFields = items.stream().map(mapper).toList();
-        List<R> expectedFields = Arrays.stream(expectedFiles).toList();
+    public <T, R> void assertContainsOnly(List<T> actualItems,
+                                          Function<T, R> actualMapper,
+                                          List<R> expectedValues,
+                                          BiPredicate<R, R> condition) {
+        List<R> actualValues = actualItems.stream()
+                .map(actualMapper)
+                .toList();
 
-        assertThat(actualFields).containsExactlyElementsOf(expectedFields);
+        for (R actualValue : actualValues) {
+            boolean matchFound = expectedValues.stream()
+                    .anyMatch(expectedValue -> condition.test(actualValue, expectedValue));
+            assertTrue(matchFound, "Expected value not found for: " + actualValue);
+        }
+    }
+
+    public <T, U, R> void assertElementsInOrder(List<T> items,
+                                                Function<T, R> actualMapper,
+                                                List<U> expectedItems,
+                                                Function<U, R> expectedMapper,
+                                                BiPredicate<R, R> condition) {
+        List<R> actualValues = items.stream().map(actualMapper).toList();
+        List<R> expectedValues = expectedItems.stream().map(expectedMapper).toList();
+
+        if (actualValues.size() != expectedValues.size()) {
+            throw new AssertionError("Lists have different sizes");
+        }
+
+        for (int i = 0; i < actualValues.size(); i++) {
+            R actual = actualValues.get(i);
+            R expected = expectedValues.get(i);
+
+            if (!condition.test(actual, expected)) {
+                throw new AssertionError(String.format("Mismatch at index %d: actual=%s, expected=%s", i, actual, expected));
+            }
+        }
+    }
+
+    protected Map<String, byte[]> extractZipContents(InputStream zipInputStream) throws IOException {
+        Map<String, byte[]> filesMap = new HashMap<>();
+        try (ZipInputStream zis = new ZipInputStream(zipInputStream)) {
+            ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                byte[] buffer = new byte[1024];
+                int length;
+                while ((length = zis.read(buffer)) > 0) {
+                    baos.write(buffer, 0, length);
+                }
+                filesMap.put(entry.getName(), baos.toByteArray());
+                zis.closeEntry();
+            }
+        }
+        return filesMap;
+    }
+
+    protected Long createTestResource(String absolutePath, MultipartFile multipartFile) throws Exception {
+        if (absolutePath.endsWith("/")) {
+            minioService.createDirectory(absolutePath);
+            return null;
+        } else {
+            minioService.uploadObject(absolutePath, multipartFile.getInputStream(), multipartFile.getSize(), multipartFile.getContentType());
+            return multipartFile.getSize();
+        }
+    }
+
+    protected void checkIntermediateFoldersExist(String targetPath) throws Exception {
+        String[] pathParts = targetPath.split("/");
+        StringBuilder currentPath = new StringBuilder(USER_DIRECTORY_PATH);
+
+        for (String part : pathParts) {
+            if (part.isEmpty()) {
+                continue;
+            }
+            currentPath.append(part).append("/");
+            assertTrue(minioService.objectExists(currentPath.toString()));
+        }
+    }
+
+    protected void uploadContentToDirectory(String relativePath, MultipartFile[] multipartFiles) throws Exception {
+        for (MultipartFile multipartFile : multipartFiles) {
+            minioService.uploadObject(relativePath + multipartFile.getOriginalFilename(), multipartFile.getInputStream(), multipartFile.getSize(), multipartFile.getContentType());
+        }
+    }
+
+    protected void checkObjectsExistence(boolean checkExistence, String relativePath, MultipartFile... multipartFiles) {
+        for (MultipartFile multipartFile : multipartFiles) {
+            String absolutePath = relativePath + multipartFile.getOriginalFilename();
+            if (checkExistence) {
+                assertTrue(minioService.objectExists(absolutePath));
+            } else {
+                assertFalse(minioService.objectExists(absolutePath));
+            }
+        }
+    }
+
+    protected String buildPath(String path) {
+        return USER_DIRECTORY_PATH + path;
+    }
+
+    protected void checkContentMoved(String sourcePath, String targetPath, MultipartFile[] files) throws Exception {
+        checkObjectsExistence(false, USER_DIRECTORY_PATH + sourcePath, files);
+        checkObjectsExistence(true, USER_DIRECTORY_PATH + targetPath, files);
     }
 }
