@@ -109,18 +109,6 @@ public abstract class BaseTest {
         }
     }
 
-    public <T, R> void assertElementsInOrder(List<T> items, Function<T, R> mapper, List<R> expected) {
-        List<R> actualFields = items.stream().map(mapper).toList();
-        assertThat(actualFields).containsExactlyElementsOf(expected);
-    }
-
-    public <T, R> void assertElementsInOrder(List<T> items, Function<T, R> mapper, MultipartFile[] expectedFiles, Function<MultipartFile, R> expectedMapper) {
-        List<R> actualFields = items.stream().map(mapper).toList();
-        List<R> expectedFields = Arrays.stream(expectedFiles).map(expectedMapper).toList();
-
-        assertThat(actualFields).containsExactlyElementsOf(expectedFields);
-    }
-
     public <T, R> void assertContainsOnly(List<T> actualItems,
                                           Function<T, R> actualMapper,
                                           List<R> expectedValues,
@@ -201,7 +189,25 @@ public abstract class BaseTest {
 
     protected void uploadContentToDirectory(String relativePath, MultipartFile[] multipartFiles) throws Exception {
         for (MultipartFile multipartFile : multipartFiles) {
+            createIntermediateDirectoriesIfNeeded(relativePath + multipartFile.getOriginalFilename());
             minioService.uploadObject(relativePath + multipartFile.getOriginalFilename(), multipartFile.getInputStream(), multipartFile.getSize(), multipartFile.getContentType());
+        }
+    }
+
+    protected void createIntermediateDirectoriesIfNeeded(String path) throws Exception {
+        String[] pathParts = path.split("/");
+
+        StringBuilder currentDirPath = new StringBuilder();
+        for (int i = 0; i < pathParts.length - 1; i++) {
+            currentDirPath.append(pathParts[i]).append("/");
+            String directoryPath = currentDirPath.toString();
+            createEmptyObjectIfNotExist(directoryPath);
+        }
+    }
+
+    protected void createEmptyObjectIfNotExist(String path) throws Exception {
+        if (!minioService.objectExists(path)) {
+            minioService.createDirectory(path);
         }
     }
 

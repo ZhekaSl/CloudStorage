@@ -472,10 +472,10 @@ class ResourceServiceImplTest extends BaseIntegrationTest {
 
         List<ResourceResponse> responses = resourceService.searchResources(USER_1_ID, "nat");
 
-        assertThat(responses).hasSize(2);
+        assertThat(responses).hasSize(3);
         assertContainsOnly(responses,
                 ResourceResponse::getName,
-                List.of("nature.jpg", "nato.png"),
+                List.of("nature.jpg", "nato.png", "natPat"),
                 String::equals
         );
     }
