@@ -8,6 +8,16 @@ spring:
       host: ${CLOUD_REDIS_HOST}
       password: ${CLOUD_REDIS_PASSWORD}
       port: 6379
+  jpa:
+    properties.hibernate:
+      show_sql: false
+      format_sql: false
+    open-in-view: false
+
+logging:
+  level:
+    ua.zhenya.cloudstorage: INFO
+
 minio:
   endpoint: ${CLOUD_MINIO_URL}
   access-key: ${CLOUD_MINIO_USERNAME}
