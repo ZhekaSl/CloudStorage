@@ -8,7 +8,7 @@ import lombok.Data;
 
 @Data
 @Builder
-public class UserCreateRequest {
+public class AuthRequest {
     @NotBlank(message = "Username cannot be blank")
     @Size(min = 3, max = 15, message = "Username must be between 3 and 15 characters")
     @Pattern(regexp = "^[a-zA-Z0-9]+$", message = "Username can only contain letters and numbers")
