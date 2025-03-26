@@ -15,6 +15,7 @@ import ua.zhenya.cloudstorage.exception.CloudStorageException;
 import ua.zhenya.cloudstorage.service.MinioService;
 import ua.zhenya.cloudstorage.service.ResourceService;
 import ua.zhenya.cloudstorage.testdata.TestData;
+import ua.zhenya.cloudstorage.utils.PathUtils;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -36,19 +37,19 @@ class ResourceServiceImplTest extends BaseIntegrationTest {
     private MinioService minioService;
 
     @ParameterizedTest
+    @EmptySource
     @CsvSource({
-            "/, /",
-            "myfolder/, myfolder/",
-            "myfolder/inner/, myfolder/inner/"
+            "myfolder/",
+            "myfolder/inner/"
     })
-    void uploadResource_shouldUploadResource(String path, String expectedPath) throws IOException, ServerException, InsufficientDataException, ErrorResponseException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
+    void uploadResource_shouldUploadResource(String path) throws IOException, ServerException, InsufficientDataException, ErrorResponseException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
         MultipartFile multipartFile = TestData.getRandomMultipartFile();
         String relativePath = buildPath(path);
         minioService.createDirectory(relativePath);
         List<ResourceResponse> resourceResponses = resourceService.uploadResources(USER_1_ID, path, new MultipartFile[]{multipartFile});
 
         assertEquals(1, resourceResponses.size());
-        assertEquals(expectedPath, resourceResponses.getFirst().getPath());
+        assertEquals(path, resourceResponses.getFirst().getPath());
         assertEquals(multipartFile.getOriginalFilename(), resourceResponses.getFirst().getName());
         assertEquals(multipartFile.getSize(), resourceResponses.getFirst().getSize());
         assertEquals(ResourceType.FILE, resourceResponses.getFirst().getType());
@@ -64,7 +65,7 @@ class ResourceServiceImplTest extends BaseIntegrationTest {
                 TestData.getRandomMultipartFile(),
         };
 
-        List<ResourceResponse> resourceResponses = resourceService.uploadResources(USER_1_ID, "/", resources);
+        List<ResourceResponse> resourceResponses = resourceService.uploadResources(USER_1_ID, "", resources);
 
         assertEquals(2, resourceResponses.size());
         assertElementsInOrder(resourceResponses,
@@ -72,7 +73,7 @@ class ResourceServiceImplTest extends BaseIntegrationTest {
                 file -> getFilename(file.getOriginalFilename()), Objects::equals);
         assertElementsInOrder(resourceResponses,
                 ResourceResponse::getPath, Arrays.asList(resources),
-                file -> getFolderPath(file.getOriginalFilename()), Objects::equals);
+                file -> PathUtils.getCorrectResponsePath(file.getOriginalFilename()), Objects::equals);
         assertElementsInOrder(resourceResponses,
                 ResourceResponse::getSize, Arrays.asList(resources),
                 MultipartFile::getSize, Objects::equals);
@@ -189,8 +190,8 @@ class ResourceServiceImplTest extends BaseIntegrationTest {
     @CsvSource({
             "myfolder/images/nature.jpg, nature.jpg, myfolder/images/, FILE",
             "myfolder/images/, images, myfolder/, DIRECTORY",
-            "rootfolder/, rootfolder, /, DIRECTORY",
-            "/nature.jpg, nature.jpg, /, FILE",
+            "rootfolder/, rootfolder,'', DIRECTORY",
+            "/nature.jpg, nature.jpg,'', FILE",
     })
     void getResourceInfo_shouldReturnResourceInfo_whenResourceExists(String path, String expectedName, String expectedPath, ResourceType expectedType) throws Exception {
         MultipartFile multipartFileJpeg = TestData.getRandomMultipartFile();
@@ -265,7 +266,7 @@ class ResourceServiceImplTest extends BaseIntegrationTest {
     @ParameterizedTest
     @CsvSource({
             "mydirectory/images/, mydirectory/, images",
-            "rootFolder/, /, rootFolder",
+            "rootFolder/,'', rootFolder",
     })
     public void createDirectory_shouldCreateEmptyDirectory(String path, String expectedPath, String expectedFolderName) throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
         String absolutePath = buildPath(path);
@@ -434,9 +435,9 @@ class ResourceServiceImplTest extends BaseIntegrationTest {
     }
 
     @ParameterizedTest
+    @EmptySource
     @CsvSource({
-            "folder/",
-            "/"
+            "folder/"
     })
     public void getDirectoryContext_shouldReturnDirectoryContext(String path) throws Exception {
         MultipartFile[] multipartFiles = new MultipartFile[]{
@@ -453,7 +454,7 @@ class ResourceServiceImplTest extends BaseIntegrationTest {
         assertThat(directoryContent).hasSize(3);
         assertThat(directoryContent)
                 .extracting(ResourceResponse::getName)
-                .contains(multipartFiles[0].getOriginalFilename(), multipartFiles[1].getOriginalFilename(), "newFolder");
+                .contains(multipartFiles[0].getOriginalFilename(), multipartFiles[1].getOriginalFilename(), "newFolder/");
     }
 
     @Test
