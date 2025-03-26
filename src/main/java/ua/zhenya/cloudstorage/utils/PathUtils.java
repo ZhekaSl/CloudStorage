@@ -39,7 +39,7 @@ public class PathUtils {
         return isDirectory(path) ? path : path + "/";
     }
 
-    public static String getFileOrFolderName(String path) {
+    public static String getResourceName(String path) {
         if (isDirectory(path)) {
             path = path.substring(0, path.length() - 1);
         }
@@ -51,7 +51,7 @@ public class PathUtils {
         return absolutePath.endsWith("/");
     }
 
-    public static String getCorrectResponsePath(String absolutePath) {
+    public static String getResponsePath(String absolutePath) {
         String relativePath = getRelativePath(absolutePath);
         if (relativePath == null || relativePath.isEmpty())
             return "";
@@ -64,7 +64,7 @@ public class PathUtils {
         return trimmedPath.isBlank() ? "" : trimmedPath;
     }
 
-    public static ResourceType extractResourceType(String absolutePath) {
+    public static ResourceType getResourceType(String absolutePath) {
         return isDirectory(absolutePath) ? ResourceType.DIRECTORY : ResourceType.FILE;
     }
 }
