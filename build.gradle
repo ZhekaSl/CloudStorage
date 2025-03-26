@@ -7,11 +7,11 @@ plugins {
 group = 'ua.zhenya'
 version = '0.0.1-SNAPSHOT'
 
-java {
+/*java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
     }
-}
+}*/
 
 jar {
     enabled = false
@@ -51,10 +51,11 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
-bootBuildImage {
+/*bootBuildImage {
     imageName = "${'cloud-storage'}"
     environment = ["BP_JVM_VERSION": "21.*"]
-}
+}*/
+
 
 tasks.named('test') {
     useJUnitPlatform()
