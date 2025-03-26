@@ -5,6 +5,7 @@ import io.minio.StatObjectResponse;
 import io.minio.errors.*;
 import io.minio.messages.Item;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
@@ -35,6 +36,7 @@ import static ua.zhenya.cloudstorage.utils.PathUtils.*;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@Slf4j
 public class ResourceServiceImpl implements ResourceService {
     private final MinioService minioService;
 
@@ -51,8 +53,8 @@ public class ResourceServiceImpl implements ResourceService {
 
     @Override
     @Transactional
-    public List<ResourceResponse> uploadResources(Integer userId, String path, MultipartFile[] files) {
-        if (!isDirectory(path))
+    public List<ResourceResponse> uploadResources(Integer userId, String path, List<MultipartFile> files) {
+        if (!isDirectory(path) && !path.isEmpty())
             throw new CloudStorageException("Invalid path: must be a directory!", HttpStatus.NOT_FOUND);
 
         String fullRelativePath = buildPath(userId, path);
@@ -60,25 +62,25 @@ public class ResourceServiceImpl implements ResourceService {
             throw new CloudStorageException("Target directory not found!", HttpStatus.NOT_FOUND);
 
         List<ResourceResponse> uploadedResources = new ArrayList<>();
-        try {
-            for (MultipartFile file : files) {
-                String originalFilename = file.getOriginalFilename();
-                String fileAbsolutePath = fullRelativePath + originalFilename;
+
+        for (MultipartFile file : files) {
+            String originalFilename = file.getOriginalFilename();
+            String fileAbsolutePath = fullRelativePath + originalFilename;
+            if (minioService.objectExists(fileAbsolutePath))
+                throw new CloudStorageException("Resource already exists: " + originalFilename, HttpStatus.CONFLICT);
+
+            try {
                 createIntermediateDirectoriesIfNeeded(fileAbsolutePath);
-
-                if (minioService.objectExists(fileAbsolutePath))
-                    throw new CloudStorageException("File already exists!", HttpStatus.CONFLICT);
-
                 minioService.uploadObject(fileAbsolutePath, file.getInputStream(), file.getSize(), file.getContentType());
                 uploadedResources.add(new ResourceResponse(
-                        getCorrectResponsePath(fileAbsolutePath),
-                        getFileOrFolderName(fileAbsolutePath),
+                        getResponsePath(fileAbsolutePath),
+                        getResourceName(fileAbsolutePath),
                         file.getSize(),
                         ResourceType.FILE
                 ));
+            } catch (Exception e) {
+                throw new CloudStorageException("Error uploading file(s)!", HttpStatus.INTERNAL_SERVER_ERROR);
             }
-        } catch (Exception e) {
-            throw new CloudStorageException("Error uploading file(s)!", HttpStatus.INTERNAL_SERVER_ERROR);
         }
         return uploadedResources;
     }
@@ -89,13 +91,13 @@ public class ResourceServiceImpl implements ResourceService {
         if (!minioService.objectExists(absolutePath))
             throw new CloudStorageException("Resource not found!", HttpStatus.NOT_FOUND);
 
-        ResourceType resourceType = extractResourceType(absolutePath);
+        ResourceType resourceType = getResourceType(absolutePath);
         ResourceResponse resourceResponse;
         try {
             StatObjectResponse objectInfo = minioService.getObjectInfo(absolutePath);
             resourceResponse = new ResourceResponse(
-                    getCorrectResponsePath(absolutePath),
-                    getFileOrFolderName(absolutePath),
+                    getResponsePath(absolutePath),
+                    getResourceName(absolutePath),
                     resourceType == ResourceType.FILE ? objectInfo.size() : null,
                     resourceType);
         } catch (Exception e) {
@@ -122,8 +124,8 @@ public class ResourceServiceImpl implements ResourceService {
         try {
             minioService.createDirectory(absolutePath);
             resourceResponse = new ResourceResponse(
-                    getCorrectResponsePath(absolutePath),
-                    getFileOrFolderName(absolutePath),
+                    getResponsePath(absolutePath),
+                    getResourceName(absolutePath),
                     null,
                     ResourceType.DIRECTORY
             );
@@ -135,7 +137,7 @@ public class ResourceServiceImpl implements ResourceService {
 
     @Override
     public List<ResourceResponse> getDirectoryContent(Integer userId, String path) {
-        if (!isDirectory(path))
+        if (!path.isEmpty() && !isDirectory(path))
             throw new CloudStorageException("Invalid path: must be a directory!", HttpStatus.BAD_REQUEST);
 
         String absolutePath = buildPath(userId, path);
@@ -152,10 +154,10 @@ public class ResourceServiceImpl implements ResourceService {
                 if (objectName.equals(absolutePath))
                     continue;
 
-                ResourceType resourceType = extractResourceType(objectName);
+                ResourceType resourceType = getResourceType(objectName);
                 ResourceResponse resourceResponse = new ResourceResponse(
-                        getCorrectResponsePath(objectName),
-                        getFileOrFolderName(objectName),
+                        getResponsePath(objectName),
+                        isDirectory(objectName) ? getResourceName(objectName) + "/" : getResourceName(objectName),
                         resourceType == ResourceType.FILE ? item.size() : null,
                         resourceType
                 );
@@ -178,11 +180,11 @@ public class ResourceServiceImpl implements ResourceService {
             Resource content;
             if (isDirectory(absolutePath)) {
                 content = createZipArchive(absolutePath);
-                filename = getFileOrFolderName(absolutePath) + ".zip";
+                filename = getResourceName(absolutePath) + ".zip";
             } else {
                 InputStream fileInputStream = minioService.getObject(absolutePath);
                 content = new InputStreamResource(fileInputStream);
-                filename = getFileOrFolderName(absolutePath);
+                filename = getResourceName(absolutePath);
             }
             return new ResourceDownloadResponse(filename, content);
         } catch (Exception e) {
@@ -199,22 +201,22 @@ public class ResourceServiceImpl implements ResourceService {
 
         String absoluteToPath = buildPath(userId, to);
         if (minioService.objectExists(absoluteToPath))
-            throw new CloudStorageException("Target path already exists!", HttpStatus.CONFLICT);
+            throw new CloudStorageException("Resource already exists!", HttpStatus.CONFLICT);
 
         if (isDirectory(absoluteFromPath) && !isDirectory(absoluteToPath))
-            throw new CloudStorageException("Invalid target path!", HttpStatus.BAD_REQUEST);
+            throw new CloudStorageException("Invalid target path: must be a directory!", HttpStatus.BAD_REQUEST);
 
         try {
             if (isDirectory(to))
                 createEmptyObjectIfNotExist(absoluteToPath);
 
-            ResourceType actualResourceType = extractResourceType(absoluteFromPath);
+            ResourceType actualResourceType = getResourceType(absoluteFromPath);
             moveDirectoryRecursively(absoluteFromPath, absoluteToPath);
             StatObjectResponse objectInfo = minioService.getObjectInfo(absoluteToPath);
 
             return new ResourceResponse(
-                    getCorrectResponsePath(absoluteToPath),
-                    getFileOrFolderName(absoluteToPath),
+                    getResponsePath(absoluteToPath),
+                    getResourceName(absoluteToPath),
                     actualResourceType == ResourceType.FILE ? objectInfo.size() : null,
                     actualResourceType
             );
@@ -227,20 +229,19 @@ public class ResourceServiceImpl implements ResourceService {
     public List<ResourceResponse> searchResources(Integer userId, String query) {
         String userDirectoryPath = USER_DIRECTORY_PATH.formatted(userId);
         List<ResourceResponse> resourceResponses = new ArrayList<>();
+        query = query.toLowerCase();
         try {
             Iterable<Result<Item>> results = minioService.listObjects(userDirectoryPath, true);
             for (Result<Item> result : results) {
                 Item item = result.get();
                 String objectName = item.objectName();
-                String resourceName = getFileOrFolderName(objectName);
-
-                if (resourceName.toLowerCase().contains(query.toLowerCase())) {
-                    ResourceType resourceType = extractResourceType(objectName);
+                String resourceName = getResourceName(objectName);
+                if (!item.isDir() && resourceName.toLowerCase().contains(query)) {
                     resourceResponses.add(new ResourceResponse(
-                            getCorrectResponsePath(objectName),
+                            getResponsePath(objectName),
                             resourceName,
-                            resourceType == ResourceType.FILE ? item.size() : null,
-                            resourceType
+                            item.size(),
+                            ResourceType.FILE
                     ));
                 }
             }
@@ -297,8 +298,7 @@ public class ResourceServiceImpl implements ResourceService {
         return new ByteArrayResource(baos.toByteArray());
     }
 
-    private void deleteDirectoryRecursively(String absolutePath) throws
-            ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
+    private void deleteDirectoryRecursively(String absolutePath) throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
         Iterable<Result<Item>> objects = minioService.listObjects(absolutePath, true);
 
         for (Result<Item> result : objects) {
