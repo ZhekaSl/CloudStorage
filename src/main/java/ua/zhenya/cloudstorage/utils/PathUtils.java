@@ -53,14 +53,15 @@ public class PathUtils {
 
     public static String getCorrectResponsePath(String absolutePath) {
         String relativePath = getRelativePath(absolutePath);
+        if (relativePath == null || relativePath.isEmpty())
+            return "";
 
         int firstSlashIndex = relativePath.indexOf("/");
-        if (firstSlashIndex == -1) {
-            return "/";
-        }
+        if (firstSlashIndex == -1)
+            return "";
 
         String trimmedPath = relativePath.substring(firstSlashIndex + 1);
-        return trimmedPath.isBlank() ? "/" : trimmedPath;
+        return trimmedPath.isBlank() ? "" : trimmedPath;
     }
 
     public static ResourceType extractResourceType(String absolutePath) {

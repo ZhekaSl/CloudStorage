@@ -1,15 +1,30 @@
 version: '3.8'
 
 services:
+  backend1:
+    image: cloud-storage
+    container_name: cloud-storage-backend
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+      - minio
+      - redis
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+
   postgres:
     image: postgres:16.1
     container_name: cloud_postgres
     ports:
-      - "5466:5432"
+      - "5431:5431"
     environment:
-      - POSTGRES_USER=cloud-storage-user
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=cloud_storage_db
+      - POSTGRES_USER=${CLOUD_DB_USERNAME}
+      - POSTGRES_PASSWORD=${CLOUD_DB_PASSWORD}
+      - POSTGRES_DB=${CLOUD_DB_NAME}
+      - PGPORT=5431
     volumes:
       - db_storage-data:/var/lib/postgresql/data
     healthcheck:
@@ -18,6 +33,17 @@ services:
       timeout: 60s
       retries: 5
       start_period: 80s
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    ports:
+      - "6379:6379"
+    environment:
+      - REDIS_HOST=${CLOUD_REDIS_HOST}
+      - REDIS_PASSWORD=${CLOUD_REDIS_PASSWORD}
+    volumes:
+      - redis-data:/data
 
   minio:
     image: minio/minio
@@ -28,10 +54,80 @@ services:
     volumes:
       - minio-data:/data
     environment:
-      MINIO_ROOT_USER: admin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${CLOUD_MINIO_USERNAME}
+      MINIO_ROOT_PASSWORD: ${CLOUD_MINIO_PASSWORD}
     command: server /data --console-address ":9001"
+
+  frontend:
+    image: cloud-storage-frontend1
+    container_name: cloud_storage_frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend1
+
+  postgres-test:
+    image: postgres:16.1
+    container_name: postgres-test
+    environment:
+      # Жестко заданные значения для dev
+      POSTGRES_USER: test-user
+      POSTGRES_PASSWORD: test-password
+      POSTGRES_DB: cloud_storage_dev_db # Имя БД для dev
+    volumes:
+      - postgres_data_test:/var/lib/postgresql/data
+    ports:
+      - "5430:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U test-user -d cloud_storage_dev_db" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  redis-test:
+    image: redis:latest
+    container_name: redis-test
+    ports:
+      - "6378:6379"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=password
+    volumes:
+      - redis_data_test:/data
+
+    # MinIO S3-совместимое хранилище (dev)
+  minio-test:
+    image: minio/minio:latest
+    container_name: minio-test
+    environment:
+      # Жестко заданные значения для dev
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: password
+    volumes:
+      - minio_data_test:/data
+    ports:
+      - "9000:9000" # API
+      - "9001:9001" # Console
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
 
 volumes:
   minio-data:
   db_storage-data:
+  redis-data:
+  postgres_data_test:
+  minio_data_test:
+  redis_data_test:
+
+#networks:
+#  app-network:
+#    driver: bridge
