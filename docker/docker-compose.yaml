@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  backend1:
+  backend:
     image: cloud-storage
     container_name: cloud-storage-backend
     env_file:
@@ -59,75 +59,15 @@ services:
     command: server /data --console-address ":9001"
 
   frontend:
-    image: cloud-storage-frontend1
+    image: cloud_storage_frontend
     container_name: cloud_storage_frontend
     restart: always
     ports:
       - "80:80"
     depends_on:
-      - backend1
-
-  postgres-test:
-    image: postgres:16.1
-    container_name: postgres-test
-    environment:
-      # Жестко заданные значения для dev
-      POSTGRES_USER: test-user
-      POSTGRES_PASSWORD: test-password
-      POSTGRES_DB: cloud_storage_dev_db # Имя БД для dev
-    volumes:
-      - postgres_data_test:/var/lib/postgresql/data
-    ports:
-      - "5430:5432"
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U test-user -d cloud_storage_dev_db" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    restart: unless-stopped
-
-  redis-test:
-    image: redis:latest
-    container_name: redis-test
-    ports:
-      - "6378:6379"
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PASSWORD=password
-    volumes:
-      - redis_data_test:/data
-
-    # MinIO S3-совместимое хранилище (dev)
-  minio-test:
-    image: minio/minio:latest
-    container_name: minio-test
-    environment:
-      # Жестко заданные значения для dev
-      MINIO_ROOT_USER: minio
-      MINIO_ROOT_PASSWORD: password
-    volumes:
-      - minio_data_test:/data
-    ports:
-      - "9000:9000" # API
-      - "9001:9001" # Console
-    command: server /data --console-address ":9001"
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    restart: unless-stopped
+      - backend
 
 volumes:
   minio-data:
   db_storage-data:
   redis-data:
-  postgres_data_test:
-  minio_data_test:
-  redis_data_test:
-
-#networks:
-#  app-network:
-#    driver: bridge

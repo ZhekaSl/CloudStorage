@@ -1,0 +1,14 @@
+spring:
+  datasource:
+    url: ${CLOUD_DB_URL}
+    username: ${CLOUD_DB_USERNAME}
+    password: ${CLOUD_DB_PASSWORD}
+  data:
+    redis:
+      host: ${CLOUD_REDIS_HOST}
+      password: ${CLOUD_REDIS_PASSWORD}
+      port: 6379
+minio:
+  endpoint: ${CLOUD_MINIO_URL}
+  access-key: ${CLOUD_MINIO_USERNAME}
+  secret-key: ${CLOUD_MINIO_PASSWORD}

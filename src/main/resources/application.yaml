@@ -1,10 +1,18 @@
+server:
+  shutdown: graceful
+  tomcat:
+    connection-timeout: 5s
+  servlet:
+    session:
+      cookie:
+        name: CLOUD_STORAGE_SESSION
 spring:
   application:
-    name: CloudStorage
+    name: cloud-storage
   datasource:
-    url: jdbc:postgresql://localhost:5466/cloud_storage_db
-    username: cloud-storage-user
-    password: password
+    url: jdbc:postgresql://localhost:5430/cloud_storage_dev_db
+    username: test-user
+    password: test-password
     driver-class-name: org.postgresql.Driver
   jpa:
     properties.hibernate:
@@ -14,9 +22,20 @@ spring:
       format_sql: true
       hbm2ddl.auto: none
     open-in-view: false
+  data:
+    redis:
+      host: localhost
+      password: password
+      port: 6378
+  session:
+    timeout: 14d
+
+logging:
+  level:
+    ua.zhenya.cloudstorage: DEBUG
 
 minio:
-  endpoint: ${MINIO_URL:http://localhost:9000}
-  access-key: ${MINIO_USERNAME:admin}
-  secret-key: ${MINIO_PASSWORD:minioadmin}
+  endpoint: http://localhost:9000
+  access-key: minio
+  secret-key: password
   bucket-name: user-files
