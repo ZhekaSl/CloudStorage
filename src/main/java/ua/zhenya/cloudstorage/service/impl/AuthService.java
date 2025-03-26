@@ -42,7 +42,7 @@ public class AuthService {
     @Transactional
     public AuthResponse signUp(AuthRequest authRequest, HttpServletRequest request) {
         checkAlreadyAuthenticated();
-        if (userRepository.findByUsername(authRequest.getUsername()).isPresent())
+        if (userRepository.findByUsername(authRequest.getUsername().toLowerCase()).isPresent())
             throw new CloudStorageException("User with this username already exists!", HttpStatus.CONFLICT);
 
         return Optional.of(authRequest)
@@ -109,7 +109,6 @@ public class AuthService {
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
         return new AuthResponse(userDetails.getUsername());
     }
-
 
     private void checkAlreadyAuthenticated() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
