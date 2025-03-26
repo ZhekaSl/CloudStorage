@@ -8,11 +8,10 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.jdbc.Sql;
-import org.springframework.test.context.jdbc.SqlGroup;
 import org.springframework.web.multipart.MultipartFile;
 import org.testcontainers.containers.MinIOContainer;
 import ua.zhenya.cloudstorage.service.MinioService;
@@ -36,17 +35,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static ua.zhenya.cloudstorage.testdata.TestConstants.USER_DIRECTORY_PATH;
 
 @ActiveProfiles("test")
-@SqlGroup({
-        @Sql(
-                scripts = "classpath:insert-users.sql",
-                executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD
-        ),
-        @Sql(
-                scripts = "classpath:clear-users.sql",
-                executionPhase = Sql.ExecutionPhase.AFTER_TEST_METHOD
-        )
-})
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 public abstract class BaseTest {
     static final MinIOContainer minioContainer = new MinIOContainer("minio/minio")
             .withUserName("username")

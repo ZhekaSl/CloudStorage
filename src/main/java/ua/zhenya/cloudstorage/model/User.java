@@ -29,6 +29,11 @@ public class User implements Serializable {
     @CreationTimestamp
     private LocalDateTime registeredAt;
 
+    public User(String username, String password) {
+        this.username = username;
+        this.password = password;
+    }
+
     @Override
     public boolean equals(Object obj) {
         if (this == obj) return true;

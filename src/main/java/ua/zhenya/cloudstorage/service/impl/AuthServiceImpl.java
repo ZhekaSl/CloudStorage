@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
@@ -26,19 +27,22 @@ import ua.zhenya.cloudstorage.exception.CloudStorageException;
 import ua.zhenya.cloudstorage.mapper.UserMapper;
 import ua.zhenya.cloudstorage.model.User;
 import ua.zhenya.cloudstorage.repository.UserRepository;
+import ua.zhenya.cloudstorage.service.AuthService;
 
 import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class AuthService {
+@Slf4j
+public class AuthServiceImpl implements AuthService {
     private final AuthenticationManager authenticationManager;
     private final PasswordEncoder passwordEncoder;
     private final UserRepository userRepository;
     private final UserMapper userMapper;
     private final ApplicationEventPublisher eventPublisher;
 
+    @Override
     @Transactional
     public AuthResponse signUp(AuthRequest authRequest, HttpServletRequest request) {
         checkAlreadyAuthenticated();
@@ -58,6 +62,7 @@ public class AuthService {
                         HttpStatus.INTERNAL_SERVER_ERROR));
     }
 
+    @Override
     @Transactional
     public AuthResponse signIn(AuthRequest request, HttpServletRequest httpServletRequest) {
         checkAlreadyAuthenticated();
@@ -70,6 +75,7 @@ public class AuthService {
         }
     }
 
+    @Override
     @Transactional
     public void signOut(HttpServletRequest request, HttpServletResponse response) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -84,6 +90,7 @@ public class AuthService {
         }
     }
 
+    @Override
     public AuthResponse getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.isAuthenticated() && !(authentication instanceof AnonymousAuthenticationToken)) {

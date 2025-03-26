@@ -16,14 +16,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import ua.zhenya.cloudstorage.dto.AuthRequest;
 import ua.zhenya.cloudstorage.dto.AuthResponse;
-import ua.zhenya.cloudstorage.service.impl.AuthService;
+import ua.zhenya.cloudstorage.service.impl.AuthServiceImpl;
 
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/auth")
 @Tag(name = "Authentication", description = "API for user Sign-Up, Sign-In, and Sign-Out")
 public class AuthController {
-    private final AuthService authService;
+    private final AuthServiceImpl authServiceImpl;
 
     @Operation(summary = "Register a new user", description = "Registers a new user with username and password, and logs them in immediately, returning the username.")
     @ApiResponses(value = {
@@ -40,7 +40,7 @@ public class AuthController {
     @PostMapping("/sign-up")
     @ResponseStatus(HttpStatus.CREATED)
     public ResponseEntity<AuthResponse> signUp(@Valid @RequestBody AuthRequest authRequest, HttpServletRequest request) {
-        AuthResponse authResponse = authService.signUp(authRequest, request);
+        AuthResponse authResponse = authServiceImpl.signUp(authRequest, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(authResponse);
     }
 
@@ -58,7 +58,7 @@ public class AuthController {
     })
     @PostMapping("/sign-in")
     public ResponseEntity<AuthResponse> signIn(@Valid @RequestBody AuthRequest authRequest, HttpServletRequest request) {
-        AuthResponse authResponse = authService.signIn(authRequest, request);
+        AuthResponse authResponse = authServiceImpl.signIn(authRequest, request);
         return ResponseEntity.ok(authResponse);
     }
 
@@ -73,7 +73,7 @@ public class AuthController {
     })
     @PostMapping("/sign-out")
     public ResponseEntity<Void> signOut(HttpServletRequest request, HttpServletResponse response) {
-        authService.signOut(request, response);
+        authServiceImpl.signOut(request, response);
         return ResponseEntity.noContent().build();
     }
 }

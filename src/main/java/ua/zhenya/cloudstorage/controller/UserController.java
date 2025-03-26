@@ -13,14 +13,14 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import ua.zhenya.cloudstorage.dto.AuthResponse;
-import ua.zhenya.cloudstorage.service.impl.AuthService;
+import ua.zhenya.cloudstorage.service.impl.AuthServiceImpl;
 
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/user")
 @Tag(name = "User Information", description = "API for retrieving information about the authenticated user")
 public class UserController {
-    private final AuthService authService;
+    private final AuthServiceImpl authServiceImpl;
 
     @Operation(summary = "Get current user information", description = "Retrieves the username of the currently authenticated user based on their session or token.")
     @ApiResponses(value = {
@@ -34,6 +34,6 @@ public class UserController {
     })
     @GetMapping("/me")
     public ResponseEntity<AuthResponse> getCurrentUser() {
-        return ResponseEntity.ok(authService.getCurrentUser());
+        return ResponseEntity.ok(authServiceImpl.getCurrentUser());
     }
 }
