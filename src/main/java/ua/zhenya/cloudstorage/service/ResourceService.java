@@ -7,7 +7,7 @@ import ua.zhenya.cloudstorage.dto.ResourceResponse;
 import java.util.List;
 
 public interface ResourceService {
-    List<ResourceResponse> uploadResources(Integer userId, String path, MultipartFile[] files);
+    List<ResourceResponse> uploadResources(Integer userId, String path, List<MultipartFile> files);
 
     ResourceResponse getResourceInfo(Integer userId, String path);
 

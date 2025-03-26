@@ -10,27 +10,23 @@ public class PathUtils {
     public static String buildPath(Integer userId, String path) {
         String userDirectory = USER_DIRECTORY_PATH.formatted(userId);
 
-        if (path.equals("/")) {
+        if (path.equals("/"))
             return userDirectory;
-        }
 
         return userDirectory + path;
     }
 
     public static String getRelativePath(String absolutePath) {
-        if (absolutePath == null || absolutePath.isEmpty()) {
+        if (absolutePath == null || absolutePath.isEmpty())
             return "/";
-        }
 
-        if (isDirectory(absolutePath)) {
+        if (isDirectory(absolutePath))
             absolutePath = absolutePath.substring(0, absolutePath.length() - 1);
-        }
 
         int lastSlashIndex = absolutePath.lastIndexOf("/");
 
-        if (lastSlashIndex == -1) {
+        if (lastSlashIndex == -1)
             return absolutePath;
-        }
 
         return ensureTrailingSlash(absolutePath.substring(0, lastSlashIndex));
     }
@@ -40,9 +36,8 @@ public class PathUtils {
     }
 
     public static String getResourceName(String path) {
-        if (isDirectory(path)) {
+        if (isDirectory(path))
             path = path.substring(0, path.length() - 1);
-        }
 
         return Paths.get(path).getFileName().toString();
     }
