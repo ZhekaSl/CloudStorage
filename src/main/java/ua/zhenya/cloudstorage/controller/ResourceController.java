@@ -126,7 +126,7 @@ public class ResourceController {
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition.toString())
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .contentType(MediaType.parseMediaType("application/octet-stream; charset=UTF-8"))
                 .body(resource.getContent());
     }
 
