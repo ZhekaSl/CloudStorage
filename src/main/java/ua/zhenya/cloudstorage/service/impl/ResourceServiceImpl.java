@@ -235,8 +235,11 @@ public class ResourceServiceImpl implements ResourceService {
             for (Result<Item> result : results) {
                 Item item = result.get();
                 String objectName = item.objectName();
+                if (isDirectory(objectName))
+                    continue;
+
                 String resourceName = getResourceName(objectName);
-                if (!item.isDir() && resourceName.toLowerCase().contains(query)) {
+                if (resourceName.toLowerCase().contains(query)) {
                     resourceResponses.add(new ResourceResponse(
                             getResponsePath(objectName),
                             resourceName,
