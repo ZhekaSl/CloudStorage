@@ -66,7 +66,7 @@ public class AuthServiceImplTest extends BaseIntegrationTest {
         assertNotNull(authResponse);
         assertEquals("newuser", authResponse.getUsername());
 
-        Optional<User> savedUserOpt = userRepository.findByUsername("newuser");
+        Optional<User> savedUserOpt = userRepository.findByUsernameIgnoreCase("newuser");
         assertTrue(savedUserOpt.isPresent(), "User should be saved in the database");
         User savedUser = savedUserOpt.get();
         assertEquals("newuser", savedUser.getUsername());
@@ -95,11 +95,11 @@ public class AuthServiceImplTest extends BaseIntegrationTest {
         try {
             userRepository.saveAndFlush(existingUser);
         } catch (DataIntegrityViolationException e) {
-            assertTrue(userRepository.findByUsername(existingUsername).isPresent(),
+            assertTrue(userRepository.findByUsernameIgnoreCase(existingUsername).isPresent(),
                     "Existing user should be present even if save failed due to constraint.");
         }
 
-        assertTrue(userRepository.findByUsername(existingUsername).isPresent(),
+        assertTrue(userRepository.findByUsernameIgnoreCase(existingUsername).isPresent(),
                 "Pre-existing user should be found in DB before signUp call.");
 
         AuthRequest authRequest = new AuthRequest(existingUsername, "newPassword123");
@@ -122,7 +122,7 @@ public class AuthServiceImplTest extends BaseIntegrationTest {
 
         User user = new User(username, encodedPassword);
         userRepository.saveAndFlush(user);
-        assertTrue(userRepository.findByUsername(username).isPresent(),
+        assertTrue(userRepository.findByUsernameIgnoreCase(username).isPresent(),
                 "User should exist in DB before signIn");
 
         AuthRequest authRequest = new AuthRequest(username, rawPassword);
@@ -236,7 +236,7 @@ public class AuthServiceImplTest extends BaseIntegrationTest {
         User user = new User(username, passwordEncoder.encode(correctPassword));
         userRepository.saveAndFlush(user);
 
-        assertTrue(userRepository.findByUsername(username).isPresent(), "User should exist before testing invalid login");
+        assertTrue(userRepository.findByUsernameIgnoreCase(username).isPresent(), "User should exist before testing invalid login");
 
         AuthRequest authRequest = new AuthRequest(username, wrongPassword);
 
@@ -258,7 +258,7 @@ public class AuthServiceImplTest extends BaseIntegrationTest {
         String anyPassword = "anyPassword";
         AuthRequest authRequest = new AuthRequest(nonExistentUsername, anyPassword);
 
-        assertFalse(userRepository.findByUsername(nonExistentUsername).isPresent(),
+        assertFalse(userRepository.findByUsernameIgnoreCase(nonExistentUsername).isPresent(),
                 "User should not exist before testing login with non-existent user");
 
         CloudStorageException exception = assertThrows(CloudStorageException.class,

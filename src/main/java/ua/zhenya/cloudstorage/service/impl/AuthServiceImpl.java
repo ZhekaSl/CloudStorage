@@ -46,7 +46,7 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public AuthResponse signUp(AuthRequest authRequest, HttpServletRequest request) {
         checkAlreadyAuthenticated();
-        if (userRepository.findByUsername(authRequest.getUsername().toLowerCase()).isPresent())
+        if (userRepository.findByUsernameIgnoreCase(authRequest.getUsername()).isPresent())
             throw new CloudStorageException("User with this username already exists!", HttpStatus.CONFLICT);
 
         return Optional.of(authRequest)
