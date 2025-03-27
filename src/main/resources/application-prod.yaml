@@ -13,10 +13,15 @@ spring:
       show_sql: false
       format_sql: false
     open-in-view: false
+  servlet:
+    multipart:
+      max-file-size: 30MB
+      max-request-size: 30MB
 
 logging:
   level:
     ua.zhenya.cloudstorage: INFO
+
 
 minio:
   endpoint: ${CLOUD_MINIO_URL}
