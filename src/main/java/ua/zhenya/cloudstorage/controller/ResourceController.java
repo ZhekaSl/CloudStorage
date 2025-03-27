@@ -71,7 +71,7 @@ public class ResourceController {
     })
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<List<ResourceResponse>> uploadResource(@Parameter(hidden = true) @AuthenticationPrincipal UserDetailsImpl userDetailsImpl,
-                                                                 @RequestParam String path,
+                                                                 @RequestParam(defaultValue = "") String path,
                                                                  @RequestPart("object") List<MultipartFile> files) {
         Integer userId = userDetailsImpl.getId();
         int fileCount = (files != null) ? files.size() : 0;
@@ -115,9 +115,9 @@ public class ResourceController {
     @GetMapping("/download")
     public ResponseEntity<Resource> downloadResource(@Parameter(hidden = true) @AuthenticationPrincipal UserDetailsImpl userDetailsImpl,
                                                      @RequestParam @NotBlank(message = "'path' must not be blank") String path) {
-        ResourceDownloadResponse resource = resourceService.downloadResource(userDetailsImpl.getId(), path);
         Integer userId = userDetailsImpl.getId();
         log.info("Received GET /api/resource/download request for user ID: {} and path: '{}'", userId, path);
+        ResourceDownloadResponse resource = resourceService.downloadResource(userDetailsImpl.getId(), path);
         String fileName = resource.getFileName();
 
         ContentDisposition contentDisposition = ContentDisposition.attachment()
@@ -126,7 +126,7 @@ public class ResourceController {
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition.toString())
-                .contentType(MediaType.parseMediaType("application/octet-stream; charset=UTF-8"))
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(resource.getContent());
     }
 

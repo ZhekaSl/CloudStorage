@@ -81,7 +81,7 @@ public class DirectoryController {
     })
     @GetMapping
     public ResponseEntity<List<ResourceResponse>> getDirectoryContext(@Parameter(hidden = true) @AuthenticationPrincipal UserDetailsImpl userDetailsImpl,
-                                                                      @RequestParam String path) {
+                                                                      @RequestParam(defaultValue = "") String path) {
         Integer userId = userDetailsImpl.getId();
         log.info("Received GET /api/directory request for user ID: {}, path '{}'", userId, path);
         return ResponseEntity.ok(resourceService.getDirectoryContent(userDetailsImpl.getId(), path));

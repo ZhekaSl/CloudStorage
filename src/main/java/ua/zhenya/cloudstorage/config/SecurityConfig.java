@@ -32,6 +32,8 @@ public class SecurityConfig {
                             corsConfig.setAllowedOrigins(List.of(
                                     "https://cloud-storage.up.railway.app/",
                                     "localhost",
+                                    "frontend",
+                                    "frontend:80",
                                     "localhost:80",
                                     "localhost:800"
                             ));

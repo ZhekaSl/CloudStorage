@@ -1,21 +1,40 @@
 package ua.zhenya.cloudstorage.exception;
 
 import jakarta.validation.ConstraintViolationException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.NativeWebRequest;
+
+import java.util.List;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(CloudStorageException.class)
-    public ResponseEntity<ErrorResponse> handleCloudStorageException(CloudStorageException ex) {
-        ErrorResponse error = new ErrorResponse(ex.getMessage());
-        return new ResponseEntity<>(error, ex.getStatus());
+    public ResponseEntity<Object> handleCloudStorageException(CloudStorageException ex, NativeWebRequest request) {
+
+        HttpStatus status = ex.getStatus();
+        HttpHeaders headers = new HttpHeaders();
+        String acceptHeader = request.getHeader(HttpHeaders.ACCEPT);
+        List<MediaType> acceptedMediaTypes = MediaType.parseMediaTypes(acceptHeader == null ? "*/*" : acceptHeader);
+
+        boolean clientAcceptsJsonOrAll = acceptedMediaTypes.stream()
+                .anyMatch(mt -> mt.isCompatibleWith(MediaType.APPLICATION_JSON) || mt.isCompatibleWith(MediaType.ALL));
+
+        if (clientAcceptsJsonOrAll) {
+            ErrorResponse body = new ErrorResponse(ex.getMessage());
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            return new ResponseEntity<>(body, headers, status);
+        } else {
+            return ResponseEntity.status(status).build();
+        }
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
