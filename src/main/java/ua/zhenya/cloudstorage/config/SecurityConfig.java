@@ -30,7 +30,8 @@ public class SecurityConfig {
                         .configurationSource(c -> {
                             var corsConfig = new CorsConfiguration();
                             corsConfig.setAllowedOrigins(List.of(
-                                    "cloud-storage.up.railway.app",
+                                    "https://cloud-storage.up.railway.app/",
+                                    "localhost",
                                     "localhost:80",
                                     "localhost:800"
                             ));
