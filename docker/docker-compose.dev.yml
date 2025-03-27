@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  frontend:
+    image: cloud_storage_frontend
+    container_name: cloud_storage_frontend
+    restart: always
+    ports:
+      - "80:80"
+
+  postgres-test:
+    image: postgres:16.1
+    container_name: postgres-test
+    environment:
+      POSTGRES_USER: test-user
+      POSTGRES_PASSWORD: test-password
+      POSTGRES_DB: cloud_storage_dev_db
+    volumes:
+      - postgres_data_test:/var/lib/postgresql/data
+    ports:
+      - "5430:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U test-user -d cloud_storage_dev_db" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  redis-test:
+    image: redis:latest
+    container_name: redis-test
+    ports:
+      - "6378:6379"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=password
+    volumes:
+      - redis_data_test:/data
+
+  minio-test:
+    image: minio/minio:latest
+    container_name: minio-test
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: password
+    volumes:
+      - minio_data_test:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  postgres_data_test:
+  minio_data_test:
+  redis_data_test:
