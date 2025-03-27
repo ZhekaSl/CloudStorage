@@ -15,6 +15,8 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.session.data.redis.config.annotation.web.http.EnableRedisHttpSession;
 import org.springframework.web.cors.CorsConfiguration;
 
+import java.util.List;
+
 @Configuration
 @EnableWebSecurity
 @EnableRedisHttpSession(maxInactiveIntervalInSeconds = 43600)
@@ -27,7 +29,11 @@ public class SecurityConfig {
                 .cors(cors -> cors
                         .configurationSource(c -> {
                             var corsConfig = new CorsConfiguration();
-                            corsConfig.addAllowedOriginPattern("*");
+                            corsConfig.setAllowedOrigins(List.of(
+                                    "cloud-storage.up.railway.app",
+                                    "localhost:80",
+                                    "localhost:800"
+                            ));
                             corsConfig.addAllowedMethod("*");
                             corsConfig.addAllowedHeader("*");
                             corsConfig.setAllowCredentials(true);
@@ -52,7 +58,7 @@ public class SecurityConfig {
                         .logoutSuccessUrl("/api/auth/sign-in")
                         .logoutSuccessHandler((request, response, authentication) -> {
                             request.getSession().invalidate();
-                            response.setStatus(HttpServletResponse.SC_OK);
+                            response.setStatus(HttpServletResponse.SC_NO_CONTENT);
                             response.setContentType("application/json");
                             response.getWriter().write("{\"message\":\"Logout successful\"}");
                         })
